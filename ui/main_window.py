@@ -85,9 +85,11 @@ class MainWindow:
         # 创建页面实例
         self.home_page = HomePage(
             self.process_manager,
+            self.config_manager,
             on_navigate_logs=lambda: self._navigate_to(1)
         )
         self.home_page.build()
+        self.home_page.set_page(page)  # 设置页面引用以显示对话框
         
         self.log_page = LogPage(self.log_collector)
         self.log_page.build()
@@ -197,8 +199,8 @@ class MainWindow:
         # 启动资源监控
         self._start_resource_monitoring()
         
-        # 刷新首页状态
-        self.home_page.refresh_status()
+        # 刷新首页进程资源
+        self.home_page.refresh_process_resources()
     
     def _on_nav_change(self, e):
         """导航栏选择变化处理
@@ -226,7 +228,6 @@ class MainWindow:
         # 切换内容区域
         if index == 0:
             self.content_area.content = self.home_page.control
-            self.home_page.refresh_status()
         elif index == 1:
             self.content_area.content = self.log_page.control
             self.log_page.refresh()
@@ -241,6 +242,12 @@ class MainWindow:
         self.content_area.opacity = 1
         if self.page:
             self.page.update()
+        
+        # 首页资源刷新放在页面显示之后，避免阻塞
+        if index == 0:
+            self.home_page.refresh_process_resources()
+            if self.page:
+                self.page.update()
     
     def _on_theme_toggle(self, e):
         """主题切换按钮点击处理"""
@@ -308,7 +315,7 @@ class MainWindow:
             try:
                 # 更新首页的资源显示
                 if self.current_page_index == 0 and self.page:
-                    self.home_page.refresh_resources()
+                    self.home_page.refresh_process_resources()
                     
                     # 更新日志预览
                     logs = self.log_collector.get_logs()
@@ -321,9 +328,6 @@ class MainWindow:
                             "message": log.message
                         })
                     self.home_page.refresh_logs(log_entries)
-                    
-                    # 更新进程状态
-                    self.home_page.refresh_status()
                     
                     # 更新UI
                     if self.page:

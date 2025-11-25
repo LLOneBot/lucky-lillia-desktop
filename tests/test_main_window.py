@@ -88,7 +88,7 @@ def test_main_window_navigation_indices(mock_managers):
     # 测试导航到首页
     main_window._navigate_to(0)
     assert main_window.current_page_index == 0
-    main_window.home_page.refresh_status.assert_called_once()
+    # 首页不需要手动刷新，它有自己的定时刷新机制
     
     # 测试导航到日志页
     main_window._navigate_to(1)

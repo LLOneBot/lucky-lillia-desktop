@@ -96,21 +96,27 @@ class UpdateChecker:
                 error=f"检查更新失败: {e}"
             )
     
-    def check_all_updates(self, versions: Dict[str, str]) -> Dict[str, UpdateInfo]:
+    def check_all_updates(self, versions: Dict[str, str], repos: Optional[Dict[str, str]] = None) -> Dict[str, UpdateInfo]:
         """检查所有组件的更新
         
         Args:
             versions: 组件名到当前版本号的映射
                      例如: {"pmhq": "1.0.0", "llonebot": "2.1.0", "app": "1.0.0"}
+            repos: 组件名到GitHub仓库的映射（可选），如果不提供则使用默认值
+                   例如: {"pmhq": "owner/pmhq", "llonebot": "LLOneBot/LLOneBot", "app": "owner/app"}
         
         Returns:
             组件名到UpdateInfo的映射
         """
+        # 如果没有提供repos，使用默认值
+        if repos is None:
+            repos = GITHUB_REPOS
+        
         results = {}
         
         for component, current_version in versions.items():
             # 获取对应的GitHub仓库
-            repo = GITHUB_REPOS.get(component)
+            repo = repos.get(component)
             
             if repo is None:
                 results[component] = UpdateInfo(

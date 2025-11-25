@@ -72,6 +72,7 @@ QQ机器人管理器是一个基于Python Flet框架的跨平台桌面应用程�
    - `github_api.py`: GitHub API封装
    - `storage.py`: 本地持久化存储
    - `constants.py`: 常量定义
+   - `downloader.py`: 文件下载管理
 
 ## 组件和接口
 
@@ -285,6 +286,58 @@ class VersionDetector:
         """获取应用自身版本号"""
 ```
 
+### Downloader
+
+下载管理器负责从GitHub下载文件并报告进度。
+
+```python
+class Downloader:
+    """管理文件下载"""
+    
+    def __init__(self, timeout: int = 30):
+        """初始化下载管理器
+        
+        Args:
+            timeout: 下载超时时间（秒）
+        """
+        
+    def download_pmhq(self, save_path: str, 
+                     progress_callback: Optional[Callable[[int, int], None]] = None) -> bool:
+        """下载PMHQ可执行文件
+        
+        Args:
+            save_path: 保存路径
+            progress_callback: 进度回调函数，参数为(已下载字节数, 总字节数)
+            
+        Returns:
+            下载成功返回True，失败返回False
+            
+        Raises:
+            NetworkError: 网络请求失败
+            TimeoutError: 下载超时
+        """
+        
+    def get_pmhq_download_url(self) -> str:
+        """获取PMHQ最新版本的下载URL
+        
+        Returns:
+            下载URL字符串
+            
+        Raises:
+            NetworkError: 无法获取下载链接
+        """
+        
+    def check_file_exists(self, file_path: str) -> bool:
+        """检查文件是否存在
+        
+        Args:
+            file_path: 文件路径
+            
+        Returns:
+            文件存在返回True，否则返回False
+        """
+```
+
 ## 数据模型
 
 ### ProcessStatus
@@ -410,6 +463,18 @@ class AppConfig:
 ### 属性 15: 启动失败错误报告
 *对于任何*导致启动失败的情况，系统应该捕获错误并向用户显示包含失败原因的消息。
 **验证需求：7.1**
+
+### 属性 16: 文件存在性检查正确性
+*对于任何*文件路径，如果该路径指向的文件存在于文件系统中，检查函数应该返回True。
+**验证需求：9.1**
+
+### 属性 17: 下载进度报告完整性
+*对于任何*下载过程，进度回调应该至少被调用一次，且最后一次调用的已下载字节数应该等于总字节数。
+**验证需求：9.4**
+
+### 属性 18: 下载文件完整性
+*对于任何*成功的下载操作，下载完成后指定路径应该存在一个文件。
+**验证需求：9.5**
 
 ## 错误处理
 

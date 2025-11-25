@@ -6,6 +6,18 @@ dist/
 wheels/
 *.egg-info
 
+# PyInstaller
+*.spec.bak
+*.manifest
+*.exe.log
+
 # Virtual environments
 .venv
 logs/
+
+# Configuration files
+config.json
+app_settings.json
+
+# Downloaded components
+bin/*

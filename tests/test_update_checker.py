@@ -112,11 +112,18 @@ class TestUpdateChecker:
             }
         }
         
-        def mock_get_release(repo, timeout):
+        def mock_get_release(repo, timeout=10, mirrors=None):
             return mock_releases.get(repo)
         
+        # 明确传递repos参数
+        repos = {
+            "pmhq": "owner/pmhq",
+            "llonebot": "LLOneBot/LLOneBot",
+            "app": "owner/qq-bot-manager"
+        }
+        
         with patch('core.update_checker.get_latest_release', side_effect=mock_get_release):
-            results = checker.check_all_updates(versions)
+            results = checker.check_all_updates(versions, repos)
         
         assert len(results) == 3
         assert results["pmhq"].has_update is True

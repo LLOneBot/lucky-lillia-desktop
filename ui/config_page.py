@@ -36,6 +36,8 @@ class ConfigPage:
             hint_text="QQ可执行文件的路径",
             value=self.current_config.get("qq_path", ""),
             expand=True,
+            read_only=False,
+            disabled=False,
         )
         
         self.qq_path_button = ft.IconButton(
@@ -49,6 +51,8 @@ class ConfigPage:
             hint_text="pmhq.exe的路径",
             value=self.current_config.get("pmhq_path", ""),
             expand=True,
+            read_only=False,
+            disabled=False,
         )
         
         self.pmhq_path_button = ft.IconButton(
@@ -62,6 +66,8 @@ class ConfigPage:
             hint_text="llonebot.js的路径",
             value=self.current_config.get("llonebot_path", ""),
             expand=True,
+            read_only=False,
+            disabled=False,
         )
         
         self.llonebot_path_button = ft.IconButton(
@@ -75,6 +81,8 @@ class ConfigPage:
             hint_text="node.exe的路径",
             value=self.current_config.get("node_path", ""),
             expand=True,
+            read_only=False,
+            disabled=False,
         )
         
         self.node_path_button = ft.IconButton(
@@ -266,6 +274,17 @@ class ConfigPage:
             ], spacing=20, scroll=ft.ScrollMode.AUTO),
             padding=28,
         )
+        
+        # 明确设置所有路径字段为可编辑状态
+        self.qq_path_field.read_only = False
+        self.qq_path_field.disabled = False
+        self.pmhq_path_field.read_only = False
+        self.pmhq_path_field.disabled = False
+        self.llonebot_path_field.read_only = False
+        self.llonebot_path_field.disabled = False
+        self.node_path_field.read_only = False
+        self.node_path_field.disabled = False
+        
         return self.control
 
     

@@ -2,27 +2,32 @@
 
 import pytest
 from core.process_manager import ProcessManager, ProcessStatus
+from core.config_manager import ConfigManager
 from ui.home_page import (
-    ProcessStatusCard,
-    ResourceMonitorCard,
+    ProcessResourceCard,
     LogPreviewCard,
     HomePage
 )
 
 
-def test_process_status_card_creation():
-    """测试进程状态卡片创建"""
-    card = ProcessStatusCard("pmhq", "PMHQ")
+def test_process_resource_card_creation():
+    """测试进程资源卡片创建"""
+    card = ProcessResourceCard("pmhq", "PMHQ")
     assert card.process_name == "pmhq"
     assert card.display_name == "PMHQ"
-    assert card.status == ProcessStatus.STOPPED
-
-
-def test_resource_monitor_card_creation():
-    """测试资源监控卡片创建"""
-    card = ResourceMonitorCard()
     assert card.cpu_percent == 0.0
-    assert card.memory_percent == 0.0
+    assert card.memory_mb == 0.0
+    assert card.is_running == False
+
+
+def test_process_resource_card_update():
+    """测试进程资源卡片更新"""
+    card = ProcessResourceCard("pmhq", "PMHQ")
+    card.build()
+    card.update_resources(25.5, 512.0, True)
+    assert card.cpu_percent == 25.5
+    assert card.memory_mb == 512.0
+    assert card.is_running == True
 
 
 def test_log_preview_card_creation():
@@ -34,8 +39,10 @@ def test_log_preview_card_creation():
 def test_home_page_creation():
     """测试首页创建"""
     process_manager = ProcessManager()
-    home_page = HomePage(process_manager)
+    config_manager = ConfigManager()
+    home_page = HomePage(process_manager, config_manager)
     assert home_page.process_manager is process_manager
+    assert home_page.config_manager is config_manager
 
 
 def test_log_preview_update_with_empty_logs():
