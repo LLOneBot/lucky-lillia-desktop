@@ -198,3 +198,44 @@ class TestMainFunction:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestProcessManager:
+    """测试进程管理器"""
+    
+    def test_get_pid_returns_none_when_no_process(self):
+        """测试没有进程时get_pid返回None"""
+        from core.process_manager import ProcessManager
+        
+        pm = ProcessManager()
+        assert pm.get_pid("pmhq") is None
+        assert pm.get_pid("llonebot") is None
+    
+    def test_get_all_pids_returns_dict(self):
+        """测试get_all_pids返回字典"""
+        from core.process_manager import ProcessManager
+        
+        pm = ProcessManager()
+        pids = pm.get_all_pids()
+        
+        assert isinstance(pids, dict)
+        assert "pmhq" in pids
+        assert "llonebot" in pids
+        assert pids["pmhq"] is None
+        assert pids["llonebot"] is None
+    
+    def test_get_process_status_default_stopped(self):
+        """测试默认进程状态为STOPPED"""
+        from core.process_manager import ProcessManager, ProcessStatus
+        
+        pm = ProcessManager()
+        assert pm.get_process_status("pmhq") == ProcessStatus.STOPPED
+        assert pm.get_process_status("llonebot") == ProcessStatus.STOPPED
+    
+    def test_stop_all_handles_empty_processes(self):
+        """测试stop_all处理空进程列表"""
+        from core.process_manager import ProcessManager
+        
+        pm = ProcessManager()
+        # 应该不抛出异常
+        pm.stop_all()

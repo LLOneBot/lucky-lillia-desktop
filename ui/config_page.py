@@ -91,34 +91,17 @@ class ConfigPage:
             on_click=self._on_select_node_path
         )
         
-        self.auto_start_pmhq_checkbox = ft.Checkbox(
-            label="自动启动PMHQ",
-            value=self.current_config.get("auto_start_pmhq", False),
-        )
-        
-        self.auto_start_llonebot_checkbox = ft.Checkbox(
-            label="自动启动LLOneBot",
-            value=self.current_config.get("auto_start_llonebot", False),
-        )
-        
-        self.log_level_dropdown = ft.Dropdown(
-            label="日志级别",
-            options=[
-                ft.dropdown.Option("debug", "Debug"),
-                ft.dropdown.Option("info", "Info"),
-                ft.dropdown.Option("warning", "Warning"),
-                ft.dropdown.Option("error", "Error"),
-            ],
-            value=self.current_config.get("log_level", "info"),
-            width=200,
-        )
-        
-        self.port_field = ft.TextField(
-            label="端口",
-            hint_text="服务端口号",
-            value=str(self.current_config.get("port", 3000)),
+        self.auto_login_qq_field = ft.TextField(
+            label="自动登录QQ号",
+            hint_text="启动时自动登录的QQ号（可选）",
+            value=self.current_config.get("auto_login_qq", ""),
+            width=250,
             keyboard_type=ft.KeyboardType.NUMBER,
-            width=200,
+        )
+        
+        self.auto_start_bot_checkbox = ft.Checkbox(
+            label="启动软件后自动启动bot",
+            value=self.current_config.get("auto_start_bot", False),
         )
         
         # 错误提示文本
@@ -137,27 +120,11 @@ class ConfigPage:
             visible=False
         )
         
-        # 保存和重置按钮
-        self.save_button = ft.ElevatedButton(
-            "保存配置",
+        # 悬浮保存按钮
+        self.save_button = ft.FloatingActionButton(
             icon=ft.Icons.SAVE,
+            tooltip="保存配置",
             on_click=self._on_save_config,
-            style=ft.ButtonStyle(
-                bgcolor=ft.Colors.PRIMARY,
-                color=ft.Colors.ON_PRIMARY,
-                shape=ft.RoundedRectangleBorder(radius=8),
-                padding=ft.padding.symmetric(horizontal=24, vertical=12),
-            )
-        )
-        
-        self.reset_button = ft.OutlinedButton(
-            "重置为默认",
-            icon=ft.Icons.RESTORE,
-            on_click=self._on_reset_config,
-            style=ft.ButtonStyle(
-                shape=ft.RoundedRectangleBorder(radius=8),
-                padding=ft.padding.symmetric(horizontal=24, vertical=12),
-            )
         )
         
         # 文件选择器
@@ -165,115 +132,98 @@ class ConfigPage:
             on_result=self._on_file_picker_result
         )
         
-        # 构建主界面
-        self.control = ft.Container(
-            content=ft.Column([
-                ft.Row([
-                    ft.Icon(
-                        name=ft.Icons.SETTINGS,
-                        size=36,
-                        color=ft.Colors.PRIMARY
-                    ),
-                    ft.Text(
-                        "配置管理",
-                        size=32,
-                        weight=ft.FontWeight.BOLD
-                    ),
-                ], spacing=12),
-                ft.Divider(height=2, thickness=2, color=ft.Colors.PRIMARY),
-                
-                # 路径配置区域
-                ft.Row([
-                    ft.Icon(ft.Icons.FOLDER, size=24, color=ft.Colors.PRIMARY),
-                    ft.Text(
-                        "路径配置",
-                        size=22,
-                        weight=ft.FontWeight.W_600
-                    ),
-                ], spacing=10),
-                ft.Card(
-                    content=ft.Container(
-                        content=ft.Column([
-                            ft.Row([
-                                self.qq_path_field,
-                                self.qq_path_button,
-                            ], spacing=8),
-                            ft.Row([
-                                self.pmhq_path_field,
-                                self.pmhq_path_button,
-                            ], spacing=8),
-                            ft.Row([
-                                self.llonebot_path_field,
-                                self.llonebot_path_button,
-                            ], spacing=8),
-                            ft.Row([
-                                self.node_path_field,
-                                self.node_path_button,
-                            ], spacing=8),
-                        ], spacing=16),
-                        padding=24,
-                    ),
-                    elevation=3,
-                    surface_tint_color=ft.Colors.PRIMARY,
-                ),
-                
-                # 启动选项区域
-                ft.Row([
-                    ft.Icon(ft.Icons.PLAY_CIRCLE, size=24, color=ft.Colors.PRIMARY),
-                    ft.Text(
-                        "启动选项",
-                        size=22,
-                        weight=ft.FontWeight.W_600
-                    ),
-                ], spacing=10),
-                ft.Card(
-                    content=ft.Container(
-                        content=ft.Column([
-                            self.auto_start_pmhq_checkbox,
-                            self.auto_start_llonebot_checkbox,
-                        ], spacing=16),
-                        padding=24,
-                    ),
-                    elevation=3,
-                    surface_tint_color=ft.Colors.PRIMARY,
-                ),
-                
-                # 其他设置区域
-                ft.Row([
-                    ft.Icon(ft.Icons.TUNE, size=24, color=ft.Colors.PRIMARY),
-                    ft.Text(
-                        "其他设置",
-                        size=22,
-                        weight=ft.FontWeight.W_600
-                    ),
-                ], spacing=10),
-                ft.Card(
-                    content=ft.Container(
-                        content=ft.Column([
-                            self.log_level_dropdown,
-                            self.port_field,
-                        ], spacing=16),
-                        padding=24,
-                    ),
-                    elevation=3,
-                    surface_tint_color=ft.Colors.PRIMARY,
-                ),
-                
-                # 提示信息
-                self.error_text,
-                self.success_text,
-                
-                # 操作按钮
-                ft.Row([
-                    self.save_button,
-                    self.reset_button,
-                ], spacing=20),
-                
-                # 文件选择器（隐藏）
-                self.file_picker,
-            ], spacing=20, scroll=ft.ScrollMode.AUTO),
-            padding=28,
+        # 悬浮按钮容器
+        floating_buttons = ft.Container(
+            content=self.save_button,
+            right=20,
+            bottom=20,
         )
+        
+        # 主界面内容
+        main_content = ft.Column([
+            ft.Row([
+                ft.Icon(
+                    name=ft.Icons.SETTINGS,
+                    size=36,
+                    color=ft.Colors.PRIMARY
+                ),
+                ft.Text(
+                    "配置管理",
+                    size=32,
+                    weight=ft.FontWeight.BOLD
+                ),
+            ], spacing=12),
+            ft.Divider(height=2, thickness=2, color=ft.Colors.PRIMARY),
+            
+            # 路径配置区域
+            ft.Row([
+                ft.Icon(ft.Icons.FOLDER, size=24, color=ft.Colors.PRIMARY),
+                ft.Text(
+                    "路径配置",
+                    size=22,
+                    weight=ft.FontWeight.W_600
+                ),
+            ], spacing=10),
+            ft.Card(
+                content=ft.Container(
+                    content=ft.Column([
+                        ft.Row([
+                            self.qq_path_field,
+                            self.qq_path_button,
+                        ], spacing=8),
+                        ft.Row([
+                            self.pmhq_path_field,
+                            self.pmhq_path_button,
+                        ], spacing=8),
+                        ft.Row([
+                            self.llonebot_path_field,
+                            self.llonebot_path_button,
+                        ], spacing=8),
+                        ft.Row([
+                            self.node_path_field,
+                            self.node_path_button,
+                        ], spacing=8),
+                    ], spacing=16),
+                    padding=24,
+                ),
+                elevation=3,
+                surface_tint_color=ft.Colors.PRIMARY,
+            ),
+            
+            # 启动选项区域
+            ft.Row([
+                ft.Icon(ft.Icons.PLAY_CIRCLE, size=24, color=ft.Colors.PRIMARY),
+                ft.Text(
+                    "启动选项",
+                    size=22,
+                    weight=ft.FontWeight.W_600
+                ),
+            ], spacing=10),
+            ft.Card(
+                content=ft.Container(
+                    content=ft.Column([
+                        self.auto_login_qq_field,
+                        self.auto_start_bot_checkbox,
+                    ], spacing=16),
+                    padding=24,
+                ),
+                elevation=3,
+                surface_tint_color=ft.Colors.PRIMARY,
+            ),
+            
+            # 提示信息
+            self.error_text,
+            self.success_text,
+            
+            # 文件选择器（隐藏）
+            self.file_picker,
+        ], spacing=20, scroll=ft.ScrollMode.AUTO)
+        
+        # 使用Stack叠加内容和悬浮按钮
+        self.control = ft.Stack([
+            ft.Container(content=main_content, padding=28, expand=True),
+            floating_buttons,
+        ], expand=True)
         
         # 明确设置所有路径字段为可编辑状态
         self.qq_path_field.read_only = False
@@ -360,13 +310,11 @@ class ConfigPage:
                 "pmhq_path": self.pmhq_path_field.value.strip(),
                 "llonebot_path": self.llonebot_path_field.value.strip(),
                 "node_path": self.node_path_field.value.strip(),
-                "auto_start_pmhq": self.auto_start_pmhq_checkbox.value,
-                "auto_start_llonebot": self.auto_start_llonebot_checkbox.value,
-                "log_level": self.log_level_dropdown.value,
-                "port": int(self.port_field.value),
+                "auto_login_qq": self.auto_login_qq_field.value.strip(),
+                "auto_start_bot": self.auto_start_bot_checkbox.value,
             }
         except ValueError:
-            self._show_error("端口必须是有效的整数")
+            self._show_error("配置数据无效")
             return
         
         # 验证配置
@@ -386,31 +334,6 @@ class ConfigPage:
                 self.on_config_saved(config)
         else:
             self._show_error("配置保存失败，请检查文件权限")
-    
-    def _on_reset_config(self, e):
-        """重置配置按钮点击处理"""
-        # 获取默认配置
-        default_config = self.config_manager.get_default_config()
-        
-        # 更新所有输入字段
-        self.qq_path_field.value = default_config.get("qq_path", "")
-        self.pmhq_path_field.value = default_config.get("pmhq_path", "")
-        self.llonebot_path_field.value = default_config.get("llonebot_path", "")
-        self.node_path_field.value = default_config.get("node_path", "")
-        self.auto_start_pmhq_checkbox.value = default_config.get("auto_start_pmhq", False)
-        self.auto_start_llonebot_checkbox.value = default_config.get("auto_start_llonebot", False)
-        self.log_level_dropdown.value = default_config.get("log_level", "info")
-        self.port_field.value = str(default_config.get("port", 3000))
-        
-        # 隐藏提示
-        self.error_text.visible = False
-        self.success_text.visible = False
-        
-        # 更新UI（如果已添加到页面）
-        try:
-            self.control.update()
-        except (AssertionError, AttributeError):
-            pass  # 控件未添加到页面，跳过更新
     
     def _show_error(self, message: str):
         """显示错误提示
@@ -450,10 +373,8 @@ class ConfigPage:
             self.pmhq_path_field.value = self.current_config.get("pmhq_path", "")
             self.llonebot_path_field.value = self.current_config.get("llonebot_path", "")
             self.node_path_field.value = self.current_config.get("node_path", "")
-            self.auto_start_pmhq_checkbox.value = self.current_config.get("auto_start_pmhq", False)
-            self.auto_start_llonebot_checkbox.value = self.current_config.get("auto_start_llonebot", False)
-            self.log_level_dropdown.value = self.current_config.get("log_level", "info")
-            self.port_field.value = str(self.current_config.get("port", 3000))
+            self.auto_login_qq_field.value = self.current_config.get("auto_login_qq", "")
+            self.auto_start_bot_checkbox.value = self.current_config.get("auto_start_bot", False)
             
             # 隐藏提示
             self.error_text.visible = False

@@ -1,0 +1,15 @@
+{
+  "qq_path": "C:\\Program Files\\Tencent\\QQ\\QQ.exe",
+  "pmhq_path": "bin/pmhq/pmhq-win-x64.exe",
+  "llonebot_path": "llonebot.js",
+  "node_path": "node.exe",
+  "auto_start_pmhq": false,
+  "auto_start_llonebot": false,
+  "log_level": "info",
+  "port": 3000,
+  "github_repos": {
+    "pmhq": "owner/pmhq",
+    "llonebot": "LLOneBot/LLOneBot",
+    "app": "owner/qq-bot-manager"
+  }
+}

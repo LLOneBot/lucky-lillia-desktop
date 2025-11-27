@@ -66,16 +66,26 @@ class LogCollector:
             stream: 输出流对象
             level: 日志级别 ("stdout" 或 "stderr")
         """
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"开始读取 {process_name} 的 {level} 流")
+        
         try:
-            for line in stream:
-                if line:
-                    line = line.rstrip('\n\r')
+            # 使用 readline() 而不是迭代器，避免缓冲延迟
+            while True:
+                line = stream.readline()
+                if not line:  # 流结束
+                    break
+                line = line.rstrip('\n\r')
+                if line:  # 确保不是空行
                     entry = LogEntry(
                         timestamp=datetime.now(),
                         process_name=process_name,
                         level=level,
                         message=line
                     )
+                    
+                    logger.debug(f"收到日志: [{process_name}][{level}] {line[:100]}")
                     
                     with self._lock:
                         self._logs.append(entry)
@@ -122,6 +132,14 @@ class LogCollector:
     
     def set_callback(self, callback: Callable[[LogEntry], None]) -> None:
         """设置新日志回调函数，用于实时更新UI
+        
+        Args:
+            callback: 回调函数，接收LogEntry参数
+        """
+        self._callbacks.append(callback)
+    
+    def add_callback(self, callback: Callable[[LogEntry], None]) -> None:
+        """添加新日志回调函数（set_callback的别名）
         
         Args:
             callback: 回调函数，接收LogEntry参数

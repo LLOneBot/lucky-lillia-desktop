@@ -1,10 +1,10 @@
-"""更新检查模块 - 检查各组件的GitHub更新"""
+"""更新检查模块 - 检查各组件的NPM更新"""
 
 from dataclasses import dataclass
 from typing import Optional, Dict
 from packaging import version
-from utils.github_api import get_latest_release, extract_version_from_tag, GitHubAPIError
-from utils.constants import GITHUB_REPOS, UPDATE_CHECK_TIMEOUT
+from utils.npm_api import get_package_info, extract_version_from_tag, NpmAPIError
+from utils.constants import NPM_PACKAGES, GITHUB_REPOS, UPDATE_CHECK_TIMEOUT
 
 
 @dataclass
@@ -18,7 +18,7 @@ class UpdateInfo:
 
 
 class UpdateChecker:
-    """检查GitHub仓库的更新"""
+    """检查NPM包的更新"""
     
     def __init__(self, timeout: int = UPDATE_CHECK_TIMEOUT):
         """初始化更新检查器
@@ -28,38 +28,47 @@ class UpdateChecker:
         """
         self.timeout = timeout
     
-    def check_update(self, repo: str, current_version: str) -> UpdateInfo:
-        """检查指定仓库的更新
+    def check_update(self, package_name: str, current_version: str, 
+                     github_repo: Optional[str] = None) -> UpdateInfo:
+        """检查指定npm包的更新
         
         Args:
-            repo: GitHub仓库 (格式: "owner/repo")
+            package_name: npm包名称
             current_version: 当前版本号
+            github_repo: GitHub仓库地址（用于生成release URL）
             
         Returns:
             UpdateInfo对象，包含是否有更新、最新版本等信息
         """
         try:
-            # 获取最新release信息
-            release_data = get_latest_release(repo, timeout=self.timeout)
+            # 获取最新包信息
+            package_info = get_package_info(package_name, timeout=self.timeout)
             
-            if release_data is None:
+            if package_info is None:
                 return UpdateInfo(
                     has_update=False,
                     current_version=current_version,
                     latest_version="未知",
                     release_url="",
-                    error="未找到release信息"
+                    error="未找到npm包信息"
                 )
             
             # 提取版本号
-            latest_tag = release_data["tag_name"]
-            latest_version_str = extract_version_from_tag(latest_tag)
-            release_url = release_data["html_url"]
+            latest_version_str = package_info.get("version", "")
+            
+            # 生成release URL（使用GitHub仓库）
+            release_url = ""
+            if github_repo:
+                release_url = f"https://github.com/{github_repo}/releases"
             
             # 比较版本号
             try:
-                current_ver = version.parse(current_version)
-                latest_ver = version.parse(latest_version_str)
+                # 清理版本号
+                current_clean = extract_version_from_tag(current_version)
+                latest_clean = extract_version_from_tag(latest_version_str)
+                
+                current_ver = version.parse(current_clean)
+                latest_ver = version.parse(latest_clean)
                 
                 has_update = latest_ver > current_ver
                 
@@ -79,7 +88,7 @@ class UpdateChecker:
                     error=f"版本号格式无效: {e}"
                 )
                 
-        except GitHubAPIError as e:
+        except NpmAPIError as e:
             return UpdateInfo(
                 has_update=False,
                 current_version=current_version,
@@ -96,18 +105,25 @@ class UpdateChecker:
                 error=f"检查更新失败: {e}"
             )
     
-    def check_all_updates(self, versions: Dict[str, str], repos: Optional[Dict[str, str]] = None) -> Dict[str, UpdateInfo]:
+    def check_all_updates(self, versions: Dict[str, str], 
+                          packages: Optional[Dict[str, str]] = None,
+                          repos: Optional[Dict[str, str]] = None) -> Dict[str, UpdateInfo]:
         """检查所有组件的更新
         
         Args:
             versions: 组件名到当前版本号的映射
                      例如: {"pmhq": "1.0.0", "llonebot": "2.1.0", "app": "1.0.0"}
-            repos: 组件名到GitHub仓库的映射（可选），如果不提供则使用默认值
-                   例如: {"pmhq": "owner/pmhq", "llonebot": "LLOneBot/LLOneBot", "app": "owner/app"}
+            packages: 组件名到npm包名的映射（可选），如果不提供则使用默认值
+                   例如: {"pmhq": "pmhq", "llonebot": "llonebot", "app": "lucky-lillia-desktop"}
+            repos: 组件名到GitHub仓库的映射（可选），用于生成release URL
         
         Returns:
             组件名到UpdateInfo的映射
         """
+        # 如果没有提供packages，使用默认值
+        if packages is None:
+            packages = NPM_PACKAGES
+        
         # 如果没有提供repos，使用默认值
         if repos is None:
             repos = GITHUB_REPOS
@@ -115,20 +131,21 @@ class UpdateChecker:
         results = {}
         
         for component, current_version in versions.items():
-            # 获取对应的GitHub仓库
-            repo = repos.get(component)
+            # 获取对应的npm包名
+            package_name = packages.get(component)
+            github_repo = repos.get(component)
             
-            if repo is None:
+            if package_name is None:
                 results[component] = UpdateInfo(
                     has_update=False,
                     current_version=current_version,
                     latest_version="未知",
                     release_url="",
-                    error=f"未配置{component}的GitHub仓库"
+                    error=f"未配置{component}的npm包名"
                 )
                 continue
             
             # 检查更新
-            results[component] = self.check_update(repo, current_version)
+            results[component] = self.check_update(package_name, current_version, github_repo)
         
         return results

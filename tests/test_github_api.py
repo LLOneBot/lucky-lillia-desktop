@@ -5,6 +5,8 @@ from unittest.mock import patch, MagicMock
 from utils.github_api import (
     get_latest_release,
     extract_version_from_tag,
+    _get_release_from_api,
+    _get_release_from_mirror,
     NetworkError,
     TimeoutError,
     ParseError
@@ -25,8 +27,8 @@ class TestGitHubAPI:
         assert extract_version_from_tag("2.3.4-beta") == "2.3.4-beta"
     
     @patch('utils.github_api.requests.get')
-    def test_get_latest_release_success(self, mock_get):
-        """测试成功获取最新release"""
+    def test_get_release_from_api_success(self, mock_get):
+        """测试通过API成功获取release"""
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
@@ -37,21 +39,69 @@ class TestGitHubAPI:
         }
         mock_get.return_value = mock_response
         
-        result = get_latest_release("test/repo")
+        result = _get_release_from_api("test/repo", timeout=10)
         
         assert result is not None
         assert result["tag_name"] == "v1.0.0"
         assert result["name"] == "Release 1.0.0"
-        assert result["html_url"] == "https://github.com/test/repo/releases/tag/v1.0.0"
     
     @patch('utils.github_api.requests.get')
-    def test_get_latest_release_not_found(self, mock_get):
-        """测试仓库不存在或没有release"""
+    def test_get_release_from_api_not_found(self, mock_get):
+        """测试API返回404"""
         mock_response = MagicMock()
         mock_response.status_code = 404
         mock_get.return_value = mock_response
         
-        result = get_latest_release("test/nonexistent")
+        result = _get_release_from_api("test/nonexistent", timeout=10)
+        
+        assert result is None
+    
+    @patch('utils.github_api.requests.get')
+    def test_get_release_from_api_invalid_json(self, mock_get):
+        """测试API返回无效JSON"""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.side_effect = ValueError("Invalid JSON")
+        mock_response.raise_for_status = MagicMock()
+        mock_get.return_value = mock_response
+        
+        with pytest.raises(ParseError):
+            _get_release_from_api("test/repo", timeout=10)
+    
+    @patch('utils.github_api.requests.get')
+    def test_get_release_from_api_missing_tag_name(self, mock_get):
+        """测试API响应缺少tag_name"""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"name": "Release"}
+        mock_response.raise_for_status = MagicMock()
+        mock_get.return_value = mock_response
+        
+        with pytest.raises(ParseError):
+            _get_release_from_api("test/repo", timeout=10)
+    
+    @patch('utils.github_api.requests.get')
+    def test_get_release_from_mirror_success(self, mock_get):
+        """测试通过镜像成功获取release"""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.url = "https://mirror.com/test/repo/releases/tag/v2.0.0"
+        mock_response.text = ""
+        mock_get.return_value = mock_response
+        
+        result = _get_release_from_mirror("test/repo", "https://mirror.com/", timeout=10)
+        
+        assert result is not None
+        assert result["tag_name"] == "v2.0.0"
+    
+    @patch('utils.github_api.requests.get')
+    def test_get_release_from_mirror_not_found(self, mock_get):
+        """测试镜像返回404"""
+        mock_response = MagicMock()
+        mock_response.status_code = 404
+        mock_get.return_value = mock_response
+        
+        result = _get_release_from_mirror("test/repo", "https://mirror.com/", timeout=10)
         
         assert result is None
     
@@ -72,51 +122,6 @@ class TestGitHubAPI:
         
         with pytest.raises(NetworkError):
             get_latest_release("test/repo")
-    
-    @patch('utils.github_api.requests.get')
-    def test_get_latest_release_invalid_json(self, mock_get):
-        """测试无效的JSON响应"""
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.side_effect = ValueError("Invalid JSON")
-        mock_get.return_value = mock_response
-        
-        with pytest.raises(ParseError):
-            get_latest_release("test/repo")
-    
-    @patch('utils.github_api.requests.get')
-    def test_get_latest_release_missing_tag_name(self, mock_get):
-        """测试响应缺少tag_name字段"""
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "name": "Release",
-            "html_url": "https://github.com/test/repo/releases"
-        }
-        mock_get.return_value = mock_response
-        
-        with pytest.raises(ParseError):
-            get_latest_release("test/repo")
-    
-    @patch('utils.github_api.requests.get')
-    def test_get_latest_release_custom_timeout(self, mock_get):
-        """测试自定义超时时间"""
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "tag_name": "v1.0.0",
-            "name": "Release 1.0.0",
-            "html_url": "https://github.com/test/repo/releases/tag/v1.0.0",
-            "published_at": "2024-01-01T00:00:00Z"
-        }
-        mock_get.return_value = mock_response
-        
-        get_latest_release("test/repo", timeout=5)
-        
-        # 验证timeout参数被正确传递
-        mock_get.assert_called_once()
-        call_kwargs = mock_get.call_args[1]
-        assert call_kwargs['timeout'] == 5
 
 
 if __name__ == "__main__":

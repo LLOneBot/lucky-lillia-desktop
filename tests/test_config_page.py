@@ -60,8 +60,10 @@ def test_config_page_loads_default_config(config_manager):
     
     # 验证加载了默认配置
     assert page.pmhq_path_field.value == "bin/pmhq/pmhq-win-x64.exe"
-    assert page.llonebot_path_field.value == "llonebot.js"
-    assert page.node_path_field.value == "node.exe"
+    assert page.llonebot_path_field.value == "bin/llonebot/llonebot.js"
+    assert page.node_path_field.value == "bin/llonebot/node.exe"
+    assert page.ffmpeg_path_field.value == "bin/llonebot/ffmpeg.exe"
+    assert page.ffprobe_path_field.value == "bin/llonebot/ffprobe.exe"
     assert page.auto_start_pmhq_checkbox.value == False
     assert page.auto_start_llonebot_checkbox.value == False
     assert page.log_level_dropdown.value == "info"

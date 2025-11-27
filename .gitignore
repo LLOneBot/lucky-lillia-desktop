@@ -19,5 +19,8 @@ logs/
 config.json
 app_settings.json
 
-# Downloaded components
 bin/*
+package/
+.hypothesis/
+.idea/
+pmhq_config.json

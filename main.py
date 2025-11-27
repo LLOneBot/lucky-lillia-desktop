@@ -15,7 +15,7 @@ import logging
 from pathlib import Path
 from datetime import datetime
 
-from core.process_manager import ProcessManager
+from core.process_manager import ProcessManager, is_admin
 from core.log_collector import LogCollector
 from core.config_manager import ConfigManager
 from core.version_detector import VersionDetector
@@ -32,11 +32,23 @@ from ui.main_window import MainWindow
 from __version__ import __version__
 
 
+# 获取应用程序所在目录
+def get_app_dir() -> Path:
+    """获取应用程序所在目录"""
+    if getattr(sys, 'frozen', False):
+        # 打包后的exe
+        return Path(sys.executable).parent
+    else:
+        # 开发模式
+        return Path(__file__).parent
+
+
 # 配置日志系统
 def setup_logging():
     """配置应用日志系统"""
-    # 创建logs目录
-    log_dir = Path("logs")
+    # 创建logs目录（使用应用程序所在目录）
+    app_dir = get_app_dir()
+    log_dir = app_dir / "logs"
     log_dir.mkdir(exist_ok=True)
     
     # 生成日志文件名（包含日期）
@@ -69,6 +81,13 @@ def initialize_managers():
         Exception: 如果任何管理器初始化失败
     """
     logger.info("开始初始化管理器...")
+    
+    # 检查管理员权限
+    if is_admin():
+        logger.info("当前以管理员权限运行，可以获取PMHQ的日志输出")
+    else:
+        logger.info("当前以普通用户权限运行，如果PMHQ需要管理员权限，将无法获取其日志输出")
+        logger.info("提示：以管理员身份运行本管理器可以获取完整的日志输出")
     
     try:
         # 初始化进程管理器

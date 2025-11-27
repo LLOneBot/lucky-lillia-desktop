@@ -10,6 +10,7 @@ from core.update_checker import UpdateChecker
 from ui.home_page import HomePage
 from ui.log_page import LogPage
 from ui.config_page import ConfigPage
+from ui.llonebot_config_page import LLOneBotConfigPage
 from ui.about_page import AboutPage
 from ui.theme import apply_theme, toggle_theme, get_current_theme_mode
 from utils.storage import Storage
@@ -86,10 +87,16 @@ class MainWindow:
         self.home_page = HomePage(
             self.process_manager,
             self.config_manager,
-            on_navigate_logs=lambda: self._navigate_to(1)
+            log_collector=self.log_collector,
+            on_navigate_logs=lambda: self._navigate_to(1),
+            version_detector=self.version_detector,
+            update_checker=self.update_checker
         )
         self.home_page.build()
         self.home_page.set_page(page)  # 设置页面引用以显示对话框
+        
+        # 进入控制面板时检查更新
+        self.home_page.check_for_updates()
         
         self.log_page = LogPage(self.log_collector)
         self.log_page.build()
@@ -99,6 +106,11 @@ class MainWindow:
             on_config_saved=self._on_config_saved
         )
         self.config_page.build()
+        
+        self.llonebot_config_page = LLOneBotConfigPage(
+            get_uin_func=self.process_manager.get_uin
+        )
+        self.llonebot_config_page.build()
         
         self.about_page = AboutPage(
             self.version_detector,
@@ -130,7 +142,13 @@ class MainWindow:
                 ft.NavigationRailDestination(
                     icon=ft.Icons.SETTINGS_OUTLINED,
                     selected_icon=ft.Icons.SETTINGS,
-                    label="配置管理",
+                    label="启动配置",
+                    padding=ft.padding.symmetric(vertical=8)
+                ),
+                ft.NavigationRailDestination(
+                    icon=ft.Icons.TUNE_OUTLINED,
+                    selected_icon=ft.Icons.TUNE,
+                    label="Bot配置",
                     padding=ft.padding.symmetric(vertical=8)
                 ),
                 ft.NavigationRailDestination(
@@ -162,20 +180,43 @@ class MainWindow:
             animate_opacity=300,
         )
         
+        # 创建头像/图标容器
+        self.avatar_icon = ft.Icon(
+            name=ft.Icons.SMART_TOY,
+            size=32,
+            color=ft.Colors.PRIMARY
+        )
+        self.avatar_image = ft.Image(
+            src="",
+            width=48,
+            height=48,
+            fit=ft.ImageFit.COVER,
+            border_radius=ft.border_radius.all(24),
+            visible=False
+        )
+        self.avatar_container = ft.Container(
+            content=ft.Stack([
+                self.avatar_icon,
+                self.avatar_image
+            ]),
+            padding=ft.padding.symmetric(vertical=20),
+            alignment=ft.alignment.center,
+        )
+        
+        # 设置uin回调，当获取到uin时更新头像
+        self.process_manager.set_uin_callback(self._on_uin_received)
+        
+        # 如果已经有uin，立即更新头像
+        current_uin = self.process_manager.get_uin()
+        if current_uin:
+            self._update_avatar(current_uin)
+        
         # 创建主布局
         main_layout = ft.Row([
             # 左侧导航栏
             ft.Container(
                 content=ft.Column([
-                    ft.Container(
-                        content=ft.Icon(
-                            name=ft.Icons.SMART_TOY,
-                            size=32,
-                            color=ft.Colors.PRIMARY
-                        ),
-                        padding=ft.padding.symmetric(vertical=20),
-                        alignment=ft.alignment.center,
-                    ),
+                    self.avatar_container,
                     ft.Container(
                         content=self.nav_rail,
                         expand=True,
@@ -215,7 +256,7 @@ class MainWindow:
         """导航到指定页面
         
         Args:
-            index: 页面索引 (0=首页, 1=日志, 2=配置, 3=关于)
+            index: 页面索引 (0=首页, 1=日志, 2=配置, 3=LLOneBot配置, 4=关于)
         """
         self.current_page_index = index
         self.nav_rail.selected_index = index
@@ -230,11 +271,14 @@ class MainWindow:
             self.content_area.content = self.home_page.control
         elif index == 1:
             self.content_area.content = self.log_page.control
-            self.log_page.refresh()
+            self.log_page.on_page_enter()
         elif index == 2:
             self.content_area.content = self.config_page.control
             self.config_page.refresh()
         elif index == 3:
+            self.content_area.content = self.llonebot_config_page.control
+            self.llonebot_config_page.refresh()
+        elif index == 4:
             self.content_area.content = self.about_page.control
             self.about_page.refresh()
         
@@ -274,6 +318,50 @@ class MainWindow:
         # 配置保存后可以执行一些操作，比如重启进程
         pass
     
+    def _on_uin_received(self, uin: str, nickname: str):
+        """uin获取成功的回调
+        
+        Args:
+            uin: QQ号
+            nickname: 昵称
+        """
+        # 有uin就更新头像
+        if uin:
+            self._update_avatar(uin)
+        # 有nickname才更新标题
+        if uin and nickname:
+            self._update_home_title(uin, nickname)
+    
+    def _update_avatar(self, uin: str):
+        """更新侧边栏头像
+        
+        Args:
+            uin: QQ号
+        """
+        if not uin:
+            return
+        
+        # 构建QQ头像URL
+        avatar_url = f"https://thirdqq.qlogo.cn/g?b=qq&nk={uin}&s=640"
+        
+        # 更新头像图片
+        self.avatar_image.src = avatar_url
+        self.avatar_image.visible = True
+        self.avatar_icon.visible = False
+        
+        if self.page:
+            self.page.update()
+    
+    def _update_home_title(self, uin: str, nickname: str):
+        """更新首页标题
+        
+        Args:
+            uin: QQ号
+            nickname: 昵称
+        """
+        if uin and nickname:
+            self.home_page.update_title(f"{nickname}({uin})")
+    
     def _on_window_event(self, e):
         """窗口事件处理
         
@@ -281,8 +369,29 @@ class MainWindow:
             e: 窗口事件
         """
         if e.data == "close":
+            # 检查是否有待执行的应用更新（首页或关于页面）
+            if self.home_page.has_pending_app_update():
+                self._execute_pending_update(self.home_page.get_pending_update_script())
+            elif self.about_page.has_pending_app_update():
+                self._execute_pending_update(self.about_page.get_pending_update_script())
             # 窗口关闭时的清理逻辑
             self._cleanup()
+    
+    def _execute_pending_update(self, script_path: str):
+        """执行待处理的应用更新
+        
+        Args:
+            script_path: 更新脚本路径
+        """
+        import subprocess
+        import os
+        
+        if script_path and os.path.exists(script_path):
+            batch_dir = os.path.dirname(script_path)
+            subprocess.Popen(
+                f'cmd /c start "更新" /D "{batch_dir}" "{script_path}"',
+                shell=True
+            )
     
     def _cleanup(self):
         """清理资源，停止所有进程和线程"""
