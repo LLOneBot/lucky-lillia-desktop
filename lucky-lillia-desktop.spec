@@ -8,6 +8,8 @@ a = Analysis(
     binaries=[],
     datas=[
         ('__version__.py', '.'),
+        ('icon.ico', '.'),
+        ('icon.png', '.'),
     ],
     hiddenimports=[
         'flet',
@@ -55,5 +57,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    # icon='icon.ico',  # Application icon (uncomment if you have icon file)
+    icon='icon.ico',  # Application icon
 )

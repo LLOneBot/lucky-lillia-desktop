@@ -404,14 +404,14 @@ class ProcessManager:
                     # 尝试优雅地终止进程
                     process.terminate()
                     
-                    # 等待进程结束（最多3秒）
+                    # 等待进程结束（最多1.5秒，更新时需要快速退出）
                     try:
-                        process.wait(timeout=3)
+                        process.wait(timeout=1.5)
                     except subprocess.TimeoutExpired:
                         # 如果进程没有响应，强制杀死
                         logger.warning(f"进程 {process_name} 没有响应，强制终止")
                         process.kill()
-                        process.wait()
+                        process.wait(timeout=1)  # 强制杀死后最多等待1秒
                     
                     del self._processes[process_name]
                     self._status[process_name] = ProcessStatus.STOPPED
@@ -435,9 +435,9 @@ class ProcessManager:
                     proc = psutil.Process(admin_pid)
                     proc.terminate()
                     
-                    # 等待进程结束（最多3秒）
+                    # 等待进程结束（最多1.5秒，更新时需要快速退出）
                     try:
-                        proc.wait(timeout=3)
+                        proc.wait(timeout=1.5)
                     except psutil.TimeoutExpired:
                         logger.warning(f"管理员进程 {process_name} 没有响应，强制终止")
                         proc.kill()

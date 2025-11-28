@@ -105,6 +105,9 @@ class MainWindow:
         self.home_page.build()
         self.home_page.set_page(page)  # 设置页面引用以显示对话框
         
+        # 设置页面的主窗口引用，供子页面使用
+        page.main_window = self
+        
         # 进入控制面板时检查更新
         self.home_page.check_for_updates()
         
@@ -487,8 +490,12 @@ class MainWindow:
             self.page.window.focused = True
             self.page.update()
     
-    def _do_close(self):
-        """执行真正的关闭操作"""
+    def _do_close(self, force_exit: bool = False):
+        """执行真正的关闭操作
+        
+        Args:
+            force_exit: 是否强制快速退出（用于更新重启）
+        """
         # 检查是否有待执行的应用更新（首页或关于页面）
         if self.home_page.has_pending_app_update():
             self._execute_pending_update(self.home_page.get_pending_update_script())
@@ -496,11 +503,47 @@ class MainWindow:
             self._execute_pending_update(self.about_page.get_pending_update_script())
         
         # 窗口关闭时的清理逻辑
-        self._cleanup()
+        self._cleanup(force_cleanup=force_exit)
         
-        # 真正关闭窗口
-        if self.page:
-            self.page.window.destroy()
+        # 对于更新重启，使用更快的退出方式
+        if force_exit:
+            # 更新重启时，强制终止所有可能残留的进程，然后退出
+            import os
+            import sys
+            
+            # 尝试强制终止当前进程树中的所有子进程
+            try:
+                import psutil
+                current_process = psutil.Process()
+                children = current_process.children(recursive=True)
+                for child in children:
+                    try:
+                        child.terminate()
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        pass
+                
+                # 等待一小段时间让子进程退出
+                import time
+                time.sleep(0.3)
+                
+                # 强制杀死仍然存在的子进程
+                for child in children:
+                    try:
+                        if child.is_running():
+                            child.kill()
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        pass
+            except ImportError:
+                # 如果没有psutil，使用简单的等待
+                import time
+                time.sleep(0.5)
+            
+            # 强制退出主进程
+            os._exit(0)
+        else:
+            # 正常退出时，使用标准方式
+            if self.page:
+                self.page.window.destroy()
     
     def _execute_pending_update(self, script_path: str):
         """执行待处理的应用更新
@@ -518,24 +561,43 @@ class MainWindow:
                 shell=True
             )
     
-    def _cleanup(self):
-        """清理资源，停止所有进程和线程"""
+    def _cleanup(self, force_cleanup: bool = False):
+        """清理资源，停止所有进程和线程
+        
+        Args:
+            force_cleanup: 是否强制清理（用于更新重启）
+        """
         # 停止资源监控
         self.monitoring_resources = False
         if self.resource_monitor_thread and self.resource_monitor_thread.is_alive():
-            self.resource_monitor_thread.join(timeout=1)
+            timeout = 0.2 if force_cleanup else 0.5
+            self.resource_monitor_thread.join(timeout=timeout)
         
         # 停止托盘图标
         if self.tray_icon:
             try:
-                self.tray_icon.stop()
+                if force_cleanup:
+                    # 强制清理时，直接停止，不使用异步
+                    self.tray_icon.stop()
+                else:
+                    # 正常清理时，使用异步
+                    import threading
+                    def stop_tray():
+                        try:
+                            self.tray_icon.stop()
+                        except Exception:
+                            pass
+                    threading.Thread(target=stop_tray, daemon=True).start()
             except Exception:
                 pass
         
-        # 保存窗口尺寸
-        if self.page:
-            self.storage.save_setting("window_width", self.page.window.width)
-            self.storage.save_setting("window_height", self.page.window.height)
+        # 保存窗口尺寸（强制清理时跳过）
+        if not force_cleanup and self.page:
+            try:
+                self.storage.save_setting("window_width", self.page.window.width)
+                self.storage.save_setting("window_height", self.page.window.height)
+            except Exception:
+                pass  # 忽略保存失败
         
         # 停止所有进程
         self.process_manager.stop_all()

@@ -1,7 +1,7 @@
 [project]
-name = "qq-bot-manager"
+name = "lucky-lillia-desktop"
 version = "1.0.0"
-description = "QQ机器人管理器 - 管理和监控QQ机器人相关的后端服务"
+description = "幸运莉莉娅，管理 PMHQ 和 LLBot 的桌面客户端"
 requires-python = ">=3.9"
 dependencies = [
     "flet>=0.21.0",

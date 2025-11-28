@@ -71,15 +71,19 @@ def test_main_window_navigation_indices(mock_managers):
     # 创建模拟的页面实例
     main_window.home_page = Mock()
     main_window.home_page.control = Mock()
-    main_window.home_page.refresh_status = Mock()
+    main_window.home_page.refresh_process_resources = Mock()
     
     main_window.log_page = Mock()
     main_window.log_page.control = Mock()
-    main_window.log_page.refresh = Mock()
+    main_window.log_page.on_page_enter = Mock()
     
     main_window.config_page = Mock()
     main_window.config_page.control = Mock()
     main_window.config_page.refresh = Mock()
+    
+    main_window.llonebot_config_page = Mock()
+    main_window.llonebot_config_page.control = Mock()
+    main_window.llonebot_config_page.refresh = Mock()
     
     main_window.about_page = Mock()
     main_window.about_page.control = Mock()
@@ -88,21 +92,27 @@ def test_main_window_navigation_indices(mock_managers):
     # 测试导航到首页
     main_window._navigate_to(0)
     assert main_window.current_page_index == 0
-    # 首页不需要手动刷新，它有自己的定时刷新机制
+    # 首页会在导航后调用 refresh_process_resources
+    main_window.home_page.refresh_process_resources.assert_called_once()
     
     # 测试导航到日志页
     main_window._navigate_to(1)
     assert main_window.current_page_index == 1
-    main_window.log_page.refresh.assert_called_once()
+    main_window.log_page.on_page_enter.assert_called_once()
     
     # 测试导航到配置页
     main_window._navigate_to(2)
     assert main_window.current_page_index == 2
     main_window.config_page.refresh.assert_called_once()
     
-    # 测试导航到关于页
+    # 测试导航到LLOneBot配置页
     main_window._navigate_to(3)
     assert main_window.current_page_index == 3
+    main_window.llonebot_config_page.refresh.assert_called_once()
+    
+    # 测试导航到关于页
+    main_window._navigate_to(4)
+    assert main_window.current_page_index == 4
     main_window.about_page.refresh.assert_called_once()
 
 

@@ -513,19 +513,28 @@ cd /d "{current_dir}"
 echo 正在更新应用程序，请稍候...
 echo.
 
-:: 等待原程序退出（通过PID检查，最多等待30秒）
+:: 等待原程序退出（通过PID检查，最多等待10秒）
 set count=0
 :wait_loop
 tasklist /FI "PID eq {current_pid}" 2>NUL | find /I "{current_pid}" >NUL
 if errorlevel 1 goto do_update
 set /a count=%count%+1
-if %count% geq 30 (
-    echo 等待超时，请手动关闭程序后重试
-    pause
-    exit /b 1
+if %count% geq 20 (
+    echo 等待超时，尝试强制终止进程...
+    taskkill /F /PID {current_pid} 2>NUL
+    timeout /t 1 /nobreak >nul
+    tasklist /FI "PID eq {current_pid}" 2>NUL | find /I "{current_pid}" >NUL
+    if errorlevel 1 (
+        echo 进程已强制终止
+        goto do_update
+    ) else (
+        echo 无法终止进程，请手动关闭程序后重试
+        pause
+        exit /b 1
+    )
 )
-echo 等待程序退出... %count%/30
-timeout /t 1 /nobreak >nul
+echo 等待程序退出... %count%/20
+timeout /t 0.5 /nobreak >nul
 goto wait_loop
 
 :do_update

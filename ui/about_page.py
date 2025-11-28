@@ -761,6 +761,7 @@ class AboutPage:
                 self.page.update()
             
             def on_restart(e):
+                import os  # 在函数开始时导入os模块
                 self._close_dialog(success_dialog)
                 # 启动更新脚本并退出当前程序
                 # 使用 cmd /c start 启动批处理，确保在新窗口中运行
@@ -769,9 +770,17 @@ class AboutPage:
                     f'cmd /c start "更新" /D "{batch_dir}" "{batch_script}"',
                     shell=True
                 )
-                # 退出当前程序
+                # 清空待执行的更新脚本，避免主窗口退出时重复执行
+                self._pending_app_update_script = None
+                # 直接退出程序，不触发关闭确认对话框
                 if self.page:
-                    self.page.window.close()
+                    # 通过主窗口实例直接调用关闭方法
+                    main_window = getattr(self.page, 'main_window', None)
+                    if main_window and hasattr(main_window, '_do_close'):
+                        main_window._do_close(force_exit=True)  # 强制快速退出
+                    else:
+                        # 备用方案：直接退出进程
+                        os._exit(0)
             
             def on_later(e):
                 self._close_dialog(success_dialog)
