@@ -1,3 +1,6 @@
 {
-  "theme_mode": "dark"
+  "theme_mode": "light",
+  "window_width": 1200.0,
+  "window_height": 800.0,
+  "close_to_tray": true
 }

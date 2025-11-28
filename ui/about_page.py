@@ -282,10 +282,11 @@ class AboutPage:
                     content=ft.Container(
                         content=ft.Column([
                             ft.Row([
-                                ft.Icon(
-                                    name=ft.Icons.ROCKET_LAUNCH,
-                                    size=56,
-                                    color=ft.Colors.PRIMARY
+                                ft.Image(
+                                    src="icon.png",
+                                    width=56,
+                                    height=56,
+                                    fit=ft.ImageFit.CONTAIN,
                                 ),
                                 ft.Column([
                                     ft.Text(

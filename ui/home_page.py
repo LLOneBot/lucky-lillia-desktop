@@ -519,17 +519,20 @@ class HomePage:
             weight=ft.FontWeight.BOLD
         )
         
+        # 标题图标（显示昵称时隐藏）
+        self.title_icon = ft.Icon(
+            name=ft.Icons.DASHBOARD,
+            size=36,
+            color=ft.Colors.PRIMARY
+        )
+        
         # 主内容区域
         main_content = ft.Column([
             # 更新提示横幅
             self.update_banner,
             
             ft.Row([
-                ft.Icon(
-                    name=ft.Icons.DASHBOARD,
-                    size=36,
-                    color=ft.Colors.PRIMARY
-                ),
+                self.title_icon,
                 self.title_text,
             ], spacing=12),
             ft.Divider(height=2, thickness=2, color=ft.Colors.PRIMARY),
@@ -1715,9 +1718,37 @@ class HomePage:
             pmhq_path = config.get("pmhq_path", DEFAULT_CONFIG["pmhq_path"])
             qq_path = config.get("qq_path", "")
             auto_login_qq = config.get("auto_login_qq", "")
+            headless = config.get("headless", False)
+            
+            # 如果QQ路径为空，尝试从注册表获取
+            if not qq_path:
+                from utils.qq_path import get_win_reg_qq_path
+                reg_qq_path = get_win_reg_qq_path()
+                if reg_qq_path and reg_qq_path.exists():
+                    qq_path = str(reg_qq_path)
+                    logger.info(f"从注册表获取到QQ路径: {qq_path}")
+                    # 保存到配置
+                    config["qq_path"] = qq_path
+                    self.config_manager.save_config(config)
+                else:
+                    logger.warning("未找到QQ路径")
+                    self._show_error_dialog(
+                        "未找到QQ路径", 
+                        "未能自动检测到QQ安装路径，请在「启动配置」中手动指定QQ路径，或安装QQ后重试。"
+                    )
+                    return
+            
+            # 检查QQ路径是否真实存在
+            if not Path(qq_path).exists():
+                logger.warning(f"QQ路径不存在: {qq_path}")
+                self._show_error_dialog(
+                    "QQ路径无效", 
+                    f"指定的QQ路径不存在：{qq_path}\n\n请在「启动配置」中重新指定正确的QQ路径。"
+                )
+                return
             if self.downloader.check_file_exists(pmhq_path):
-                logger.info(f"正在启动PMHQ: {pmhq_path}, qq_path={qq_path}, auto_login_qq={auto_login_qq}")
-                pmhq_success = self.process_manager.start_pmhq(pmhq_path, qq_path=qq_path, auto_login_qq=auto_login_qq)
+                logger.info(f"正在启动PMHQ: {pmhq_path}, qq_path={qq_path}, auto_login_qq={auto_login_qq}, headless={headless}")
+                pmhq_success = self.process_manager.start_pmhq(pmhq_path, qq_path=qq_path, auto_login_qq=auto_login_qq, headless=headless)
                 if pmhq_success:
                     pmhq_pid = self.process_manager.get_pid("pmhq")
                     logger.info(f"PMHQ启动成功，PID: {pmhq_pid}")
@@ -1815,6 +1846,9 @@ class HomePage:
         """
         if self.title_text:
             self.title_text.value = title
+            # 显示昵称时隐藏图标
+            if self.title_icon:
+                self.title_icon.visible = (title == "控制面板")
             if self.page:
                 self.page.update()
     

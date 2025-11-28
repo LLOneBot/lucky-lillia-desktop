@@ -137,6 +137,25 @@ def initialize_managers():
         raise
 
 
+def get_icon_path() -> str | None:
+    """获取应用图标路径
+    
+    Returns:
+        图标文件路径，如果不存在则返回 None
+    """
+    import os
+    
+    app_dir = get_app_dir()
+    icon_names = ["icon.ico", "icon.png", "icon.jpg", "icon.jpeg"]
+    
+    for name in icon_names:
+        icon_path = app_dir / name
+        if icon_path.exists():
+            return str(icon_path)
+    
+    return None
+
+
 def main(page: ft.Page):
     """应用主入口函数
     
@@ -152,6 +171,12 @@ def main(page: ft.Page):
         page.window.height = DEFAULT_WINDOW_HEIGHT
         page.window.min_width = 800
         page.window.min_height = 600
+        
+        # 设置窗口图标
+        icon_path = get_icon_path()
+        if icon_path:
+            page.window.icon = icon_path
+            logger.info(f"已设置窗口图标: {icon_path}")
         
         # 初始化所有管理器
         managers = initialize_managers()

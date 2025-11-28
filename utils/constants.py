@@ -26,6 +26,8 @@ DEFAULT_CONFIG = {
     "ffprobe_path": "bin/llonebot/ffprobe.exe",
     "auto_start_pmhq": False,
     "auto_start_llonebot": False,
+    "auto_start_bot": False,
+    "headless": False,
     "log_level": "info",
     "port": 3000,
     "npm_packages": {
@@ -76,3 +78,7 @@ RESOURCE_MONITOR_INTERVAL = 5  # 秒
 DEFAULT_WINDOW_WIDTH = 1200
 DEFAULT_WINDOW_HEIGHT = 800
 DEFAULT_THEME = "light"
+
+# 托盘设置
+TRAY_TOOLTIP = "幸运莉莉娅 - QQ机器人管理器"
+CLOSE_TO_TRAY_DEFAULT = False  # 默认关闭时不收进托盘

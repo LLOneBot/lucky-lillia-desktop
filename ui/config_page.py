@@ -104,6 +104,11 @@ class ConfigPage:
             value=self.current_config.get("auto_start_bot", False),
         )
         
+        self.headless_checkbox = ft.Checkbox(
+            label="无头模式（不显示QQ窗口，可能有掉线风险）",
+            value=self.current_config.get("headless", False),
+        )
+        
         # 错误提示文本
         self.error_text = ft.Text(
             "",
@@ -204,6 +209,7 @@ class ConfigPage:
                     content=ft.Column([
                         self.auto_login_qq_field,
                         self.auto_start_bot_checkbox,
+                        self.headless_checkbox,
                     ], spacing=16),
                     padding=24,
                 ),
@@ -312,6 +318,7 @@ class ConfigPage:
                 "node_path": self.node_path_field.value.strip(),
                 "auto_login_qq": self.auto_login_qq_field.value.strip(),
                 "auto_start_bot": self.auto_start_bot_checkbox.value,
+                "headless": self.headless_checkbox.value,
             }
         except ValueError:
             self._show_error("配置数据无效")
@@ -375,6 +382,7 @@ class ConfigPage:
             self.node_path_field.value = self.current_config.get("node_path", "")
             self.auto_login_qq_field.value = self.current_config.get("auto_login_qq", "")
             self.auto_start_bot_checkbox.value = self.current_config.get("auto_start_bot", False)
+            self.headless_checkbox.value = self.current_config.get("headless", False)
             
             # 隐藏提示
             self.error_text.visible = False

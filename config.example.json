@@ -5,6 +5,8 @@
   "node_path": "node.exe",
   "auto_start_pmhq": false,
   "auto_start_llonebot": false,
+  "auto_start_bot": false,
+  "headless": false,
   "log_level": "info",
   "port": 3000,
   "github_repos": {

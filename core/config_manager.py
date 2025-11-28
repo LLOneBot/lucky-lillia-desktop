@@ -95,7 +95,7 @@ class ConfigManager:
             if field in config and not isinstance(config[field], str):
                 return False, f"字段 {field} 必须是字符串类型"
         
-        bool_fields = ["auto_start_pmhq", "auto_start_llonebot"]
+        bool_fields = ["auto_start_pmhq", "auto_start_llonebot", "auto_start_bot", "headless"]
         for field in bool_fields:
             if field in config and not isinstance(config[field], bool):
                 return False, f"字段 {field} 必须是布尔类型"

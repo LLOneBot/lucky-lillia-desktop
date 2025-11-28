@@ -59,7 +59,7 @@ class ProcessManager:
         self._qq_resources: Dict[str, float] = {"cpu": 0.0, "memory": 0.0}  # QQ进程资源占用
         
     def start_pmhq(self, pmhq_path: str, config_path: str = "pmhq_config.json", 
-                   qq_path: str = "", auto_login_qq: str = "") -> bool:
+                   qq_path: str = "", auto_login_qq: str = "", headless: bool = False) -> bool:
         """启动PMHQ进程
         
         Args:
@@ -67,11 +67,12 @@ class ProcessManager:
             config_path: pmhq_config.json的路径
             qq_path: QQ可执行文件的路径（可选）
             auto_login_qq: 自动登录的QQ号（可选）
+            headless: 是否启用无头模式（可选）
             
         Returns:
             启动成功返回True，失败返回False
         """
-        logger.info(f"尝试启动PMHQ: path={pmhq_path}, config={config_path}, qq_path={qq_path}, auto_login_qq={auto_login_qq}")
+        logger.info(f"尝试启动PMHQ: path={pmhq_path}, config={config_path}, qq_path={qq_path}, auto_login_qq={auto_login_qq}, headless={headless}")
         
         with self._lock:
             # 检查是否已经在运行
@@ -109,6 +110,9 @@ class ProcessManager:
                 # 如果指定了自动登录QQ号，添加 --qq 参数
                 if auto_login_qq:
                     cmd.append(f"--qq={auto_login_qq}")
+                # 如果启用无头模式，添加 --headless 参数
+                if headless:
+                    cmd.append("--headless")
                 logger.info(f"启动命令: {cmd}")
                 
                 # 设置 CREATE_NO_WINDOW 标志，避免弹出控制台窗口
@@ -170,7 +174,7 @@ class ProcessManager:
                     else:
                         logger.warning("PMHQ需要管理员权限，尝试以管理员身份启动...")
                         logger.info("提示：如果以管理员身份运行本管理器，可以获取PMHQ的日志输出")
-                        return self._start_pmhq_as_admin(abs_pmhq_path, working_dir, qq_path, auto_login_qq)
+                        return self._start_pmhq_as_admin(abs_pmhq_path, working_dir, qq_path, auto_login_qq, headless)
                 else:
                     logger.error(f"启动PMHQ时发生OSError: {e}", exc_info=True)
                     self._status["pmhq"] = ProcessStatus.ERROR
@@ -181,7 +185,7 @@ class ProcessManager:
                 return False
     
     def _start_pmhq_as_admin(self, pmhq_path: str, working_dir: str, 
-                              qq_path: str = "", auto_login_qq: str = "") -> bool:
+                              qq_path: str = "", auto_login_qq: str = "", headless: bool = False) -> bool:
         """以管理员权限启动PMHQ（使用ShellExecute）
         
         注意：使用ShellExecute启动的进程无法获取PID和stdout/stderr
@@ -191,6 +195,7 @@ class ProcessManager:
             working_dir: 工作目录
             qq_path: QQ可执行文件的路径（可选）
             auto_login_qq: 自动登录的QQ号（可选）
+            headless: 是否启用无头模式（可选）
             
         Returns:
             启动成功返回True，失败返回False
@@ -209,6 +214,8 @@ class ProcessManager:
                 params += f' --qq-path="{qq_path}"'
             if auto_login_qq:
                 params += f' --qq={auto_login_qq}'
+            if headless:
+                params += ' --headless'
             
             # 使用ShellExecuteW以管理员权限启动
             # 参数: hwnd, operation, file, parameters, directory, show
@@ -628,7 +635,7 @@ class ProcessManager:
         return self._qq_pid
     
     def get_qq_resources(self) -> Dict[str, float]:
-        """获取QQ进程的资源占用（包括子进程）
+        """获取QQ进程的资源占用（仅指定pid的进程）
         
         Returns:
             字典，包含 cpu（百分比）和 memory（MB）
@@ -663,54 +670,53 @@ class ProcessManager:
                 timeout=5
             )
             
+            logger.info(f"getProcessInfo响应状态码: {response.status_code}")
             if response.status_code == 200:
                 data = response.json()
+                logger.info(f"getProcessInfo响应数据: {data}")
                 if data.get("type") == "call" and "data" in data:
                     result = data["data"].get("result", {})
                     pid = result.get("pid")
                     if pid:
                         self._qq_pid = pid
-                        logger.debug(f"获取QQ进程PID: {pid}")
+                        logger.info(f"获取QQ进程PID: {pid}")
                         # 计算资源占用
                         self._update_qq_resources(pid)
                         return pid
+                    else:
+                        logger.info(f"getProcessInfo返回的result中没有pid: {result}")
+                else:
+                    logger.info(f"getProcessInfo响应格式不正确: type={data.get('type')}, data存在={('data' in data)}")
+            else:
+                logger.info(f"getProcessInfo请求失败，状态码: {response.status_code}, 响应: {response.text}")
                         
         except requests.exceptions.RequestException as e:
-            logger.debug(f"获取QQ进程信息请求失败: {e}")
+            logger.info(f"获取QQ进程信息请求失败: {e}")
         except json.JSONDecodeError as e:
-            logger.debug(f"解析QQ进程信息响应失败: {e}")
+            logger.info(f"解析QQ进程信息响应失败: {e}")
         except Exception as e:
-            logger.debug(f"获取QQ进程信息时发生异常: {e}")
+            logger.info(f"获取QQ进程信息时发生异常: {e}")
         
+        # 获取失败时清空资源信息
+        self._qq_pid = None
+        self._qq_resources = {"cpu": 0.0, "memory": 0.0}
         return None
     
     def _update_qq_resources(self, pid: int) -> None:
-        """更新QQ进程的资源占用（仅主进程）
+        """更新QQ进程的资源占用（仅指定pid的进程）
         
         Args:
-            pid: QQ进程的PID
+            pid: QQ进程的PID（由getProcessInfo接口返回）
         """
         try:
             import psutil
             
-            # 获取主进程
             proc = psutil.Process(pid)
-            
-            # 验证这是QQ进程
-            try:
-                proc_name = proc.name().lower()
-                if "qq" not in proc_name:
-                    logger.debug(f"PID {pid} 不是QQ进程: {proc_name}")
-                    self._qq_pid = None
-                    self._qq_resources = {"cpu": 0.0, "memory": 0.0}
-                    return
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                pass
             
             # 获取CPU使用率（interval=None使用上次调用以来的值）
             cpu = proc.cpu_percent(interval=None)
             
-            # 获取内存使用量（RSS，单位字节）
+            # 获取内存使用量（使用RSS - 物理内存占用）
             mem_info = proc.memory_info()
             memory = mem_info.rss / (1024 * 1024)  # 转换为MB
             
@@ -718,7 +724,7 @@ class ProcessManager:
                 "cpu": cpu,
                 "memory": memory
             }
-            logger.debug(f"QQ资源占用 - PID: {pid}, CPU: {cpu:.1f}%, 内存: {memory:.1f}MB")
+            logger.info(f"QQ资源占用 - PID: {pid}, CPU: {cpu:.1f}%, 内存: {memory:.1f}MB")
             
         except psutil.NoSuchProcess:
             logger.debug(f"QQ进程 {pid} 不存在")

@@ -87,11 +87,6 @@ class LLOneBotConfigPage:
         
         self.error_text = ft.Text("", color=ft.Colors.RED_400, size=14, visible=False)
         self.success_text = ft.Text("", color=ft.Colors.GREEN_400, size=14, visible=False)
-        self.status_text = ft.Text(
-            "请先启动PMHQ并登录QQ，获取到UIN后才能编辑配置",
-            size=16, color=ft.Colors.ORANGE_400,
-            visible=not bool(self.get_uin_func())
-        )
         
         # WebUI
         self.webui_enable = ft.Checkbox(label="启用", 
@@ -139,7 +134,7 @@ class LLOneBotConfigPage:
             value=self.current_config.get("ffmpeg", ""))
 
         # 悬浮按钮
-        floating_buttons = ft.Container(
+        self.floating_buttons = ft.Container(
             content=ft.Row([
                 ft.FloatingActionButton(
                     icon=ft.Icons.REFRESH,
@@ -156,15 +151,24 @@ class LLOneBotConfigPage:
             ], spacing=12),
             right=20,
             bottom=20,
+            visible=bool(self.get_uin_func()),
         )
         
-        # 主界面内容
-        main_content = ft.Column([
-            ft.Row([ft.Icon(ft.Icons.TUNE, size=36, color=ft.Colors.PRIMARY),
-                    ft.Text("LLOneBot 配置", size=32, weight=ft.FontWeight.BOLD)], spacing=12),
-            ft.Divider(height=2, thickness=2, color=ft.Colors.PRIMARY),
-            self.status_text,
-            
+        # 未登录提示界面
+        self.no_uin_container = ft.Container(
+            content=ft.Column([
+                ft.Icon(ft.Icons.CHAT_BUBBLE_OUTLINE, size=64, color=ft.Colors.ORANGE_400),
+                ft.Text("请先启动并登录QQ", size=24, weight=ft.FontWeight.BOLD, 
+                        color=ft.Colors.ORANGE_400),
+                ft.Text("获取到QQ账号后才能编辑Bot配置", size=16, color=ft.Colors.GREY_600),
+            ], spacing=16, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+            alignment=ft.alignment.center,
+            expand=True,
+            visible=not bool(self.get_uin_func()),
+        )
+        
+        # 配置内容区域
+        self.config_content = ft.Column([
             self._section("WebUI", ft.Icons.WEB, [
                 ft.Row([self.webui_enable, self.webui_port], spacing=16)
             ]),
@@ -182,14 +186,22 @@ class LLOneBotConfigPage:
                 ft.Row([self.music_sign_url], spacing=16),
                 ft.Row([self.ffmpeg_path], spacing=16)
             ]),
-            
             self.error_text, self.success_text,
-        ], spacing=16, scroll=ft.ScrollMode.AUTO)
+        ], spacing=16, scroll=ft.ScrollMode.AUTO, visible=bool(self.get_uin_func()))
+        
+        # 主界面内容
+        main_content = ft.Column([
+            ft.Row([ft.Icon(ft.Icons.TUNE, size=36, color=ft.Colors.PRIMARY),
+                    ft.Text("LLOneBot 配置", size=32, weight=ft.FontWeight.BOLD)], spacing=12),
+            ft.Divider(height=2, thickness=2, color=ft.Colors.PRIMARY),
+            self.no_uin_container,
+            self.config_content,
+        ], spacing=16, expand=True)
         
         # 使用Stack叠加内容和悬浮按钮
         self.control = ft.Stack([
             ft.Container(content=main_content, padding=28, expand=True),
-            floating_buttons,
+            self.floating_buttons,
         ], expand=True)
         
         return self.control
@@ -422,10 +434,14 @@ class LLOneBotConfigPage:
             pass
     
     def refresh(self):
+        has_uin = bool(self.get_uin_func())
         self.current_config = self._load_config()
         self._update_ui()
         self._rebuild_tabs()
-        self.status_text.visible = not bool(self.get_uin_func())
+        # 根据是否有UIN切换显示
+        self.no_uin_container.visible = not has_uin
+        self.config_content.visible = has_uin
+        self.floating_buttons.visible = has_uin
         self.error_text.visible = False
         self.success_text.visible = False
         self._try_update()
