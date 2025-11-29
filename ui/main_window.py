@@ -128,7 +128,8 @@ class MainWindow:
         self.about_page = AboutPage(
             self.version_detector,
             self.update_checker,
-            self.config_manager
+            self.config_manager,
+            on_update_complete=self._on_about_page_update_complete
         )
         self.about_page.build(page)
         
@@ -391,6 +392,15 @@ class MainWindow:
         """
         if uin and nickname:
             self.home_page.update_title(f"{nickname}({uin})")
+    
+    def _on_about_page_update_complete(self, component: str):
+        """关于页面更新完成回调
+        
+        Args:
+            component: 更新完成的组件名称 ("app"/"pmhq"/"llonebot")
+        """
+        # 清除控制面板的更新横幅
+        self.home_page.clear_update_banner(component)
     
     def _update_window_title(self, uin: str, nickname: str):
         """更新窗口标题

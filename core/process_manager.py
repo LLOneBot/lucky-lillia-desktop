@@ -120,7 +120,11 @@ class ProcessManager:
                 if sys.platform == 'win32':
                     creation_flags = subprocess.CREATE_NO_WINDOW
                 
-                # Windows 中文系统默认使用 GBK 编码
+                # 设置环境变量，禁用 Python 子进程的输出缓冲
+                env = os.environ.copy()
+                env['PYTHONUNBUFFERED'] = '1'
+                
+                # Windows 中文系统使用 GBK 编码
                 import locale
                 system_encoding = locale.getpreferredencoding(False)
                 
@@ -133,6 +137,7 @@ class ProcessManager:
                     bufsize=1,
                     cwd=working_dir,
                     creationflags=creation_flags,
+                    env=env,
                     encoding=system_encoding,
                     errors='replace'
                 )
@@ -183,6 +188,58 @@ class ProcessManager:
                 logger.error(f"启动PMHQ时发生异常: {e}", exc_info=True)
                 self._status["pmhq"] = ProcessStatus.ERROR
                 return False
+    
+    def _start_pmhq_with_pty(self, pmhq_path: str, cmd_args: list, working_dir: str) -> bool:
+        """使用伪终端启动PMHQ（可以实时获取输出）
+        
+        Args:
+            pmhq_path: PMHQ可执行文件的绝对路径
+            cmd_args: 命令行参数列表
+            working_dir: 工作目录
+            
+        Returns:
+            启动成功返回True，失败返回False
+        """
+        import winpty
+        
+        # 构建命令行
+        cmd_line = f'"{pmhq_path}" ' + ' '.join(cmd_args)
+        logger.info(f"使用 winpty 启动: {cmd_line}")
+        
+        # 设置环境变量
+        env = os.environ.copy()
+        env['PYTHONUNBUFFERED'] = '1'
+        env['PYTHONIOENCODING'] = 'utf-8'
+        
+        # 创建伪终端进程
+        pty_process = winpty.PtyProcess.spawn(
+            cmd_line,
+            cwd=working_dir,
+            env=env
+        )
+        
+        logger.info(f"PTY进程已创建，PID: {pty_process.pid}")
+        
+        # 等待一小段时间确认进程启动成功
+        time.sleep(0.5)
+        if not pty_process.isalive():
+            logger.error("PMHQ PTY进程立即退出")
+            self._status["pmhq"] = ProcessStatus.ERROR
+            return False
+        
+        # 保存 PTY 进程
+        self._pty_processes = getattr(self, '_pty_processes', {})
+        self._pty_processes["pmhq"] = pty_process
+        self._status["pmhq"] = ProcessStatus.RUNNING
+        logger.info(f"PMHQ (PTY) 启动成功，PID: {pty_process.pid}")
+        
+        # 启动监控线程
+        self._start_monitoring()
+        
+        # 启动获取uin的线程
+        self._start_uin_fetch()
+        
+        return True
     
     def _start_pmhq_as_admin(self, pmhq_path: str, working_dir: str, 
                               qq_path: str = "", auto_login_qq: str = "", headless: bool = False) -> bool:
@@ -387,7 +444,36 @@ class ProcessManager:
             停止成功返回True，失败返回False
         """
         with self._lock:
-            # 先检查是否在普通进程字典中
+            # 先检查是否在 PTY 进程字典中
+            pty_processes = getattr(self, '_pty_processes', {})
+            if process_name in pty_processes:
+                pty_process = pty_processes[process_name]
+                try:
+                    self._status[process_name] = ProcessStatus.STOPPING
+                    logger.info(f"正在停止 PTY 进程 {process_name}...")
+                    
+                    if pty_process.isalive():
+                        # 使用 psutil 终止进程
+                        import psutil
+                        try:
+                            proc = psutil.Process(pty_process.pid)
+                            proc.terminate()
+                            proc.wait(timeout=1.5)
+                        except psutil.TimeoutExpired:
+                            proc.kill()
+                        except psutil.NoSuchProcess:
+                            pass
+                    
+                    del pty_processes[process_name]
+                    self._status[process_name] = ProcessStatus.STOPPED
+                    logger.info(f"PTY 进程 {process_name} 已停止")
+                    return True
+                except Exception as e:
+                    logger.error(f"停止 PTY 进程 {process_name} 失败: {e}")
+                    self._status[process_name] = ProcessStatus.ERROR
+                    return False
+            
+            # 再检查是否在普通进程字典中
             if process_name in self._processes:
                 process = self._processes[process_name]
                 
@@ -474,6 +560,16 @@ class ProcessManager:
     
     def stop_all(self) -> None:
         """停止所有托管进程"""
+        # 检查是否有任何进程在运行
+        pty_processes = getattr(self, '_pty_processes', {})
+        has_processes = bool(self._processes or self._admin_pids or pty_processes)
+        
+        if not has_processes:
+            # 没有运行的进程，快速退出
+            logger.info("没有运行的进程，跳过清理")
+            self._monitoring = False
+            return
+        
         logger.info("停止所有托管进程...")
         
         # 停止监控线程
@@ -504,6 +600,19 @@ class ProcessManager:
         """
         with self._lock:
             return self._processes.get(process_name)
+    
+    def get_pty_process(self, process_name: str):
+        """获取 PTY 进程对象（用于日志收集器附加）
+        
+        Args:
+            process_name: 进程名称
+            
+        Returns:
+            winpty.PtyProcess 对象，如果进程不存在返回None
+        """
+        with self._lock:
+            pty_processes = getattr(self, '_pty_processes', {})
+            return pty_processes.get(process_name)
     
     def get_pmhq_port(self) -> Optional[int]:
         """获取PMHQ使用的端口
@@ -745,7 +854,12 @@ class ProcessManager:
             进程PID，如果进程不存在或已停止返回None
         """
         with self._lock:
-            # 先检查普通进程
+            # 先检查 PTY 进程
+            pty_processes = getattr(self, '_pty_processes', {})
+            pty_process = pty_processes.get(process_name)
+            if pty_process and pty_process.isalive():
+                return pty_process.pid
+            # 再检查普通进程
             process = self._processes.get(process_name)
             if process and process.poll() is None:
                 return process.pid

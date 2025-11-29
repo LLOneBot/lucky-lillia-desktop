@@ -30,6 +30,7 @@ a = Analysis(
         'win32gui',
         'win32con',
         'win32api',
+        'winpty',
     ],
     hookspath=[],
     hooksconfig={},
@@ -54,18 +55,19 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='幸运莉莉娅',
+    name='lucky-lillia-desktop',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=True,  # Show console window for debugging
+    console=False,  # Hide console window
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
     icon='icon.ico',  # Application icon
+    uac_admin=True,  # 请求管理员权限
 )

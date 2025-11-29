@@ -137,19 +137,34 @@ def initialize_managers():
         raise
 
 
+def get_resource_path(relative_path: str) -> Path:
+    """获取资源文件的绝对路径（支持 PyInstaller 打包）
+    
+    Args:
+        relative_path: 相对路径
+        
+    Returns:
+        资源文件的绝对路径
+    """
+    if getattr(sys, 'frozen', False):
+        # PyInstaller 打包后，资源文件在 _MEIPASS 临时目录中
+        base_path = Path(sys._MEIPASS)
+    else:
+        # 开发模式，使用当前目录
+        base_path = Path(__file__).parent
+    return base_path / relative_path
+
+
 def get_icon_path() -> str | None:
     """获取应用图标路径
     
     Returns:
         图标文件路径，如果不存在则返回 None
     """
-    import os
-    
-    app_dir = get_app_dir()
     icon_names = ["icon.ico", "icon.png", "icon.jpg", "icon.jpeg"]
     
     for name in icon_names:
-        icon_path = app_dir / name
+        icon_path = get_resource_path(name)
         if icon_path.exists():
             return str(icon_path)
     

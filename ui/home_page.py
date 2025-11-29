@@ -1076,16 +1076,26 @@ class HomePage:
                     # 显示Node.exe下载对话框
                     self._show_node_download_dialog()
                 else:
-                    # 检查LLOneBot是否需要下载
-                    llonebot_path = config.get("llonebot_path", DEFAULT_CONFIG["llonebot_path"])
-                    llonebot_exists = self.downloader.check_file_exists(llonebot_path)
+                    # 检查FFmpeg/FFprobe是否需要下载
+                    ffmpeg_path = config.get("ffmpeg_path", DEFAULT_CONFIG["ffmpeg_path"])
+                    ffprobe_path = config.get("ffprobe_path", DEFAULT_CONFIG["ffprobe_path"])
+                    ffmpeg_exists = self.downloader.check_file_exists(ffmpeg_path)
+                    ffprobe_exists = self.downloader.check_file_exists(ffprobe_path)
                     
-                    if not llonebot_exists:
-                        # 显示LLOneBot下载对话框
-                        self._show_llonebot_download_dialog()
+                    if not ffmpeg_exists or not ffprobe_exists:
+                        # ffmpeg和ffprobe在同一个npm包中，下载一次即可
+                        self._show_ffmpeg_download_dialog()
                     else:
-                        # 启动所有服务
-                        self._start_all_services()
+                        # 检查LLOneBot是否需要下载
+                        llonebot_path = config.get("llonebot_path", DEFAULT_CONFIG["llonebot_path"])
+                        llonebot_exists = self.downloader.check_file_exists(llonebot_path)
+                        
+                        if not llonebot_exists:
+                            # 显示LLOneBot下载对话框
+                            self._show_llonebot_download_dialog()
+                        else:
+                            # 启动所有服务
+                            self._start_all_services()
             
         except DownloadError as ex:
             if self.is_downloading:  # 只在未取消时显示错误
@@ -1758,6 +1768,8 @@ class HomePage:
                         if pmhq_process:
                             self.log_collector.attach_process("PMHQ", pmhq_process)
                             logger.info("PMHQ进程已附加到日志收集器")
+                        else:
+                            logger.warning("PMHQ进程对象为空，无法收集日志（可能是以管理员权限单独启动的）")
                 else:
                     logger.error("PMHQ启动失败")
                     self._show_error_dialog("启动失败", "PMHQ启动失败")
@@ -1986,6 +1998,32 @@ class HomePage:
                     pass
         
         threading.Thread(target=update_logs, daemon=True).start()
+    
+    def clear_update_banner(self, component: str = None):
+        """清除更新横幅
+        
+        Args:
+            component: 要清除的组件名称（"app"/"pmhq"/"llonebot"），如果为None则清除所有
+        """
+        if component:
+            # 从更新列表中移除指定组件
+            component_map = {"app": "管理器", "pmhq": "PMHQ", "llonebot": "LLOneBot"}
+            display_name = component_map.get(component, component)
+            self._updates_found = [(name, info) for name, info in self._updates_found if name != display_name]
+            
+            # 如果还有其他更新，更新横幅文字
+            if self._updates_found:
+                update_names = [name for name, _ in self._updates_found]
+                self.update_banner.content.controls[1].value = f"发现新版本: {', '.join(update_names)}"
+            else:
+                self.update_banner.visible = False
+        else:
+            # 清除所有更新
+            self._updates_found = []
+            self.update_banner.visible = False
+        
+        if self.page:
+            self.page.update()
     
     def check_for_updates(self):
         """检查管理器、PMHQ和LLOneBot更新（进入控制面板时调用）"""

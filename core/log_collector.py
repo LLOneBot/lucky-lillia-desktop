@@ -58,6 +58,69 @@ class LogCollector:
         # 保存线程引用
         self._reader_threads[process_name] = [stdout_thread, stderr_thread]
     
+    def attach_pty_process(self, process_name: str, pty_process) -> None:
+        """附加到 PTY 进程的输出流
+        
+        Args:
+            process_name: 进程名称
+            pty_process: winpty.PtyProcess 对象
+        """
+        # 创建线程读取 PTY 输出
+        pty_thread = threading.Thread(
+            target=self._read_pty_stream,
+            args=(process_name, pty_process),
+            daemon=True
+        )
+        pty_thread.start()
+        
+        # 保存线程引用
+        self._reader_threads[process_name] = [pty_thread]
+    
+    def _read_pty_stream(self, process_name: str, pty_process) -> None:
+        """读取 PTY 进程输出流
+        
+        Args:
+            process_name: 进程名称
+            pty_process: winpty.PtyProcess 对象
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"开始读取 {process_name} 的 PTY 流")
+        
+        try:
+            while pty_process.isalive():
+                try:
+                    # 读取一行输出
+                    line = pty_process.readline()
+                    if line:
+                        line = line.rstrip('\n\r')
+                        if line:
+                            entry = LogEntry(
+                                timestamp=datetime.now(),
+                                process_name=process_name,
+                                level="stdout",
+                                message=line
+                            )
+                            
+                            logger.debug(f"收到PTY日志: [{process_name}] {line[:100]}")
+                            
+                            with self._lock:
+                                self._logs.append(entry)
+                            
+                            # 调用回调函数
+                            for callback in self._callbacks:
+                                try:
+                                    callback(entry)
+                                except Exception:
+                                    pass
+                except EOFError:
+                    break
+                except Exception as e:
+                    logger.debug(f"读取 PTY 流时发生异常: {e}")
+                    break
+        except Exception as e:
+            logger.debug(f"PTY 流读取循环异常: {e}")
+    
     def _read_stream(self, process_name: str, stream, level: str) -> None:
         """读取进程输出流
         
@@ -71,11 +134,12 @@ class LogCollector:
         logger.info(f"开始读取 {process_name} 的 {level} 流")
         
         try:
-            # 使用 readline() 而不是迭代器，避免缓冲延迟
             while True:
                 line = stream.readline()
                 if not line:  # 流结束
+                    logger.info(f"{process_name} 的 {level} 流已结束")
                     break
+                
                 line = line.rstrip('\n\r')
                 if line:  # 确保不是空行
                     entry = LogEntry(
@@ -96,8 +160,8 @@ class LogCollector:
                             callback(entry)
                         except Exception:
                             pass  # 忽略回调中的错误
-        except Exception:
-            pass  # 流关闭或其他错误
+        except Exception as e:
+            logger.info(f"读取 {process_name} 的 {level} 流时发生异常: {e}")
     
     def get_logs(self, process_name: Optional[str] = None) -> List[LogEntry]:
         """获取日志条目

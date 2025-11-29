@@ -182,7 +182,8 @@ class AboutPage:
                  version_detector: VersionDetector,
                  update_checker: UpdateChecker,
                  config_manager: Optional[ConfigManager] = None,
-                 downloader: Optional[Downloader] = None):
+                 downloader: Optional[Downloader] = None,
+                 on_update_complete: Optional[Callable[[str], None]] = None):
         """初始化关于页面
         
         Args:
@@ -190,9 +191,11 @@ class AboutPage:
             update_checker: 更新检查器实例
             config_manager: 配置管理器实例（可选，用于获取路径）
             downloader: 下载器实例（可选，用于下载更新）
+            on_update_complete: 更新完成回调（参数为组件名称）
         """
         self.version_detector = version_detector
         self.update_checker = update_checker
+        self.on_update_complete = on_update_complete
         self.config_manager = config_manager
         self.downloader = downloader or Downloader()
         self.control = None
@@ -696,18 +699,15 @@ class AboutPage:
             if self.page:
                 self.page.update()
             
-            # 显示成功提示
-            success_dialog = ft.AlertDialog(
-                title=ft.Text("更新完成"),
-                content=ft.Text(f"{display_name} 已更新成功！\n\n请重新启动服务以使用新版本。"),
-                actions=[
-                    ft.TextButton("确定", on_click=lambda e: self._close_dialog(success_dialog))
-                ],
-            )
-            if self.page:
-                self.page.overlay.append(success_dialog)
-                success_dialog.open = True
-                self.page.update()
+            # 清除更新状态（因为已经更新完成）
+            if component == "pmhq":
+                self.pmhq_card.clear_update_status()
+            else:
+                self.llonebot_card.clear_update_status()
+            
+            # 通知外部更新完成（清除控制面板的更新横幅）
+            if self.on_update_complete:
+                self.on_update_complete(component)
             
             # 刷新版本信息
             self._load_versions()
@@ -784,20 +784,12 @@ class AboutPage:
             
             def on_later(e):
                 self._close_dialog(success_dialog)
-                # 保存脚本路径，退出时自动执行
-                info_dialog = ft.AlertDialog(
-                    title=ft.Text("稍后更新"),
-                    content=ft.Text(
-                        "更新已下载完成。\n\n"
-                        "退出程序时将自动完成更新。"
-                    ),
-                    actions=[
-                        ft.TextButton("确定", on_click=lambda e: self._close_dialog(info_dialog))
-                    ],
-                )
+                # 清除更新状态（更新已下载，不再显示更新按钮）
+                self.app_card.clear_update_status()
+                # 通知外部更新完成（清除控制面板的更新横幅）
+                if self.on_update_complete:
+                    self.on_update_complete("app")
                 if self.page:
-                    self.page.overlay.append(info_dialog)
-                    info_dialog.open = True
                     self.page.update()
             
             # 显示成功提示，询问是否立即重启
