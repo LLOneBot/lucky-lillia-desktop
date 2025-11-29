@@ -9,6 +9,25 @@ from utils.constants import APP_NAME, NPM_PACKAGES, GITHUB_REPOS
 from utils.downloader import Downloader, DownloadError
 import threading
 import os
+import sys
+
+
+def get_resource_path(relative_path: str) -> str:
+    """获取资源文件的绝对路径（支持 PyInstaller 打包）
+    
+    Args:
+        relative_path: 相对路径
+        
+    Returns:
+        资源文件的绝对路径
+    """
+    if getattr(sys, 'frozen', False):
+        # PyInstaller 打包后，资源文件在 _MEIPASS 临时目录中
+        base_path = sys._MEIPASS
+    else:
+        # 开发模式，使用当前目录
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
 
 
 class VersionInfoCard:
@@ -286,9 +305,9 @@ class AboutPage:
                         content=ft.Column([
                             ft.Row([
                                 ft.Image(
-                                    src="icon.png",
-                                    width=56,
-                                    height=56,
+                                    src=get_resource_path("icon.png"),
+                                    width=80,
+                                    height=80,
                                     fit=ft.ImageFit.CONTAIN,
                                 ),
                                 ft.Column([
