@@ -253,8 +253,15 @@ class MainWindow:
         
         page.add(main_layout)
         
-        # 设置系统托盘
-        self._setup_system_tray()
+        # 设置系统托盘（延迟一点启动，确保窗口已完全初始化）
+        def delayed_tray_setup():
+            import time
+            time.sleep(2)  # 等待2秒，确保窗口完全加载
+            print("延迟托盘初始化开始...")
+            self._setup_system_tray()
+        
+        tray_setup_thread = threading.Thread(target=delayed_tray_setup, daemon=True)
+        tray_setup_thread.start()
         
         # 启动资源监控
         self._start_resource_monitoring()
@@ -605,47 +612,77 @@ class MainWindow:
     def _setup_system_tray(self):
         """设置系统托盘（使用 pystray）"""
         try:
+            print("开始初始化系统托盘...")
             import pystray
             from PIL import Image, ImageDraw
+            print("pystray 和 PIL 导入成功")
             
             # 保存 pystray 模块引用
             self._pystray = pystray
             
             # 创建托盘图标
+            print("正在创建托盘图标图像...")
             icon_image = self._create_tray_icon_image()
+            print(f"托盘图标创建成功，尺寸: {icon_image.size}, 模式: {icon_image.mode}")
             
             # 获取当前窗口标题
             current_title = self._get_current_window_title()
+            print(f"窗口标题: {current_title}")
             
             # 创建托盘菜单
+            print("创建托盘菜单...")
             menu = pystray.Menu(
                 pystray.MenuItem(
-                    current_title,
+                    "显示窗口",
                     self._on_tray_show,
                     default=True  # 设为默认项，单击时触发
                 ),
                 pystray.Menu.SEPARATOR,
                 pystray.MenuItem("退出程序", self._on_tray_exit)
             )
+            print("托盘菜单创建成功")
             
             # 创建托盘图标
+            print("创建托盘图标对象...")
             self.tray_icon = pystray.Icon(
                 name="lucky_lillia",
                 icon=icon_image,
                 title=current_title,
                 menu=menu
             )
+            print("托盘图标对象创建成功")
             
-            # 在后台线程运行托盘
-            self.tray_thread = threading.Thread(target=self.tray_icon.run, daemon=True)
-            self.tray_thread.start()
+            print("开始启动系统托盘...")
+            # 使用 run_detached 方法，这样不会阻塞主线程
+            try:
+                self.tray_icon.run_detached()
+                print("托盘图标已启动（detached 模式）")
+            except AttributeError:
+                # 如果没有 run_detached 方法，使用线程方式
+                print("使用线程方式启动托盘...")
+                self.tray_thread = threading.Thread(target=self._run_tray_icon, daemon=True)
+                self.tray_thread.start()
+                print("托盘线程已启动")
             
         except ImportError as e:
             print(f"系统托盘初始化失败（缺少依赖）: {e}")
             self.tray_icon = None
         except Exception as e:
             print(f"系统托盘初始化失败: {e}")
+            import traceback
+            traceback.print_exc()
             self.tray_icon = None
+    
+    def _run_tray_icon(self):
+        """运行托盘图标的线程函数"""
+        try:
+            print("托盘图标开始运行...")
+            self.tray_icon.run()
+            print("托盘图标运行结束")
+        except Exception as e:
+            print(f"托盘图标运行失败: {e}")
+            import traceback
+            traceback.print_exc()
     
     def _get_current_window_title(self) -> str:
         """获取当前窗口标题"""
@@ -683,31 +720,63 @@ class MainWindow:
         """
         from PIL import Image, ImageDraw
         import os
+        import sys
+        
+        # 获取资源文件路径（支持 PyInstaller 打包）
+        def get_resource_path(relative_path):
+            """获取资源文件的绝对路径"""
+            try:
+                # PyInstaller 创建临时文件夹，并将路径存储在 _MEIPASS 中
+                base_path = sys._MEIPASS
+            except AttributeError:
+                # 开发环境中直接使用当前目录
+                base_path = os.path.abspath(".")
+            return os.path.join(base_path, relative_path)
         
         # 首先尝试加载现有图标
         icon_paths = [
             "icon.ico", "icon.png", "icon.jpg", "icon.jpeg",
             "assets/icon.ico", "assets/icon.png", "assets/icon.jpg", "assets/icon.jpeg"
         ]
+        print(f"尝试加载图标文件...")
         for path in icon_paths:
-            if os.path.exists(path):
+            full_path = get_resource_path(path)
+            print(f"检查路径: {full_path}")
+            if os.path.exists(full_path):
                 try:
-                    return Image.open(path)
-                except Exception:
+                    print(f"找到图标文件: {full_path}")
+                    img = Image.open(full_path)
+                    print(f"原始图标: 尺寸={img.size}, 模式={img.mode}")
+                    # 确保图标是 RGBA 格式，并且尺寸合适
+                    if img.mode != 'RGBA':
+                        img = img.convert('RGBA')
+                        print("已转换为 RGBA 格式")
+                    # 调整到合适的托盘图标尺寸
+                    if img.size != (32, 32):
+                        img = img.resize((32, 32), Image.Resampling.LANCZOS)
+                        print("已调整为 32x32 尺寸")
+                    print(f"最终图标: 尺寸={img.size}, 模式={img.mode}")
+                    return img
+                except Exception as e:
+                    print(f"加载图标失败 {full_path}: {e}")
                     pass
+            else:
+                print(f"图标文件不存在: {full_path}")
         
-        # 创建默认图标 (64x64 蓝色圆形机器人图标)
-        size = 64
+        print("未找到图标文件，使用默认图标")
+        
+        # 创建默认图标 (32x32 蓝色圆形机器人图标，适合托盘)
+        size = 32
         img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
         
         # 背景圆
-        draw.ellipse([4, 4, size-4, size-4], fill=(100, 149, 237, 255))
+        draw.ellipse([2, 2, size-2, size-2], fill=(100, 149, 237, 255))
         # 眼睛
-        draw.ellipse([18, 22, 28, 32], fill=(255, 255, 255, 255))
-        draw.ellipse([36, 22, 46, 32], fill=(255, 255, 255, 255))
+        draw.ellipse([9, 11, 14, 16], fill=(255, 255, 255, 255))
+        draw.ellipse([18, 11, 23, 16], fill=(255, 255, 255, 255))
         # 嘴巴
-        draw.arc([20, 35, 44, 50], 0, 180, fill=(255, 255, 255, 255), width=3)
+        draw.arc([10, 18, 22, 25], 0, 180, fill=(255, 255, 255, 255), width=2)
         
         return img
     
