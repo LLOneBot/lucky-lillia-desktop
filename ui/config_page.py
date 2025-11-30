@@ -223,11 +223,22 @@ class ConfigPage:
             
             # 文件选择器（隐藏）
             self.file_picker,
-        ], spacing=20, scroll=ft.ScrollMode.AUTO)
+        ], spacing=20)
         
         # 使用Stack叠加内容和悬浮按钮
+        # 滚动容器需要放在Stack内部，并且使用ListView替代Column的scroll
+        scrollable_content = ft.Container(
+            content=ft.ListView(
+                controls=[main_content],
+                spacing=0,
+                padding=28,
+                expand=True,
+            ),
+            expand=True,
+        )
+        
         self.control = ft.Stack([
-            ft.Container(content=main_content, padding=28, expand=True),
+            scrollable_content,
             floating_buttons,
         ], expand=True)
         

@@ -113,6 +113,11 @@ class LogPage:
 
     def _on_clear_logs(self, e):
         """清空日志按钮点击处理"""
+        # 先清空待处理队列，防止线程竞争
+        with self._pending_lock:
+            self._pending_logs.clear()
+            self._update_scheduled = False
+        
         self.log_collector.clear_logs()
         self._refresh_logs()
         if self.control and self.control.page:
@@ -150,24 +155,28 @@ class LogPage:
             self._pending_logs.clear()
             self._update_scheduled = False
 
-        # 批量添加日志到显示
-        for entry in logs_to_add:
-            log_widget = self._create_log_widget(entry)
-            self.log_column.controls.append(log_widget)
+        # 检查控件是否仍然有效
+        if not self.control or not self.control.page or not self.log_column:
+            return
 
-        # 限制显示的日志数量以保持性能
-        if len(self.log_column.controls) > 1000:
-            self.log_column.controls = self.log_column.controls[-1000:]
+        try:
+            # 批量添加日志到显示
+            for entry in logs_to_add:
+                log_widget = self._create_log_widget(entry)
+                self.log_column.controls.append(log_widget)
 
-        # 更新UI
-        if self.control and self.control.page:
-            try:
+            # 限制显示的日志数量以保持性能
+            if len(self.log_column.controls) > 1000:
+                self.log_column.controls = self.log_column.controls[-1000:]
+
+            # 更新UI
+            if self.control and self.control.page:
                 self.control.page.update()
                 # 如果启用自动滚动，滚动到底部
                 if self.auto_scroll:
                     self.log_column.scroll_to(offset=-1, duration=0)
-            except Exception:
-                pass  # 忽略更新错误
+        except (AssertionError, Exception):
+            pass  # 忽略更新错误，包括控件状态不一致的情况
 
     def _refresh_logs(self):
         """刷新日志显示"""

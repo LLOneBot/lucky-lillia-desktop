@@ -163,7 +163,7 @@ class LLOneBotConfigPage:
                 ft.Text("获取到QQ账号后才能编辑Bot配置", size=16, color=ft.Colors.GREY_600),
             ], spacing=16, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
             alignment=ft.alignment.center,
-            expand=True,
+            padding=ft.padding.symmetric(vertical=100),
             visible=not bool(self.get_uin_func()),
         )
         
@@ -187,20 +187,31 @@ class LLOneBotConfigPage:
                 ft.Row([self.ffmpeg_path], spacing=16)
             ]),
             self.error_text, self.success_text,
-        ], spacing=16, scroll=ft.ScrollMode.AUTO, visible=bool(self.get_uin_func()))
+        ], spacing=16, visible=bool(self.get_uin_func()))
         
-        # 主界面内容
+        # 主界面内容（所有内容放在一个Column里）
         main_content = ft.Column([
             ft.Row([ft.Icon(ft.Icons.TUNE, size=36, color=ft.Colors.PRIMARY),
                     ft.Text("LLOneBot 配置", size=32, weight=ft.FontWeight.BOLD)], spacing=12),
             ft.Divider(height=2, thickness=2, color=ft.Colors.PRIMARY),
             self.no_uin_container,
             self.config_content,
-        ], spacing=16, expand=True)
+        ], spacing=16)
+        
+        # 可滚动容器（和启动配置页一样的结构）
+        scrollable_content = ft.Container(
+            content=ft.ListView(
+                controls=[main_content],
+                spacing=0,
+                padding=28,
+                expand=True,
+            ),
+            expand=True,
+        )
         
         # 使用Stack叠加内容和悬浮按钮
         self.control = ft.Stack([
-            ft.Container(content=main_content, padding=28, expand=True),
+            scrollable_content,
             self.floating_buttons,
         ], expand=True)
         
