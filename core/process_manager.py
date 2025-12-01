@@ -57,6 +57,7 @@ class ProcessManager:
         self._uin_fetch_thread: Optional[threading.Thread] = None
         self._qq_pid: Optional[int] = None  # 存储QQ进程的PID
         self._qq_resources: Dict[str, float] = {"cpu": 0.0, "memory": 0.0}  # QQ进程资源占用
+        self._qq_process: Optional["psutil.Process"] = None  # 缓存QQ进程对象（用于正确计算CPU）
         
     def start_pmhq(self, pmhq_path: str, config_path: str = "pmhq_config.json", 
                    qq_path: str = "", auto_login_qq: str = "", headless: bool = False) -> bool:
@@ -807,6 +808,7 @@ class ProcessManager:
             logger.info(f"获取QQ进程信息时发生异常: {e}")
         
         # 获取失败时清空资源信息
+        self._qq_process = None
         self._qq_pid = None
         self._qq_resources = {"cpu": 0.0, "memory": 0.0}
         return None
@@ -820,23 +822,37 @@ class ProcessManager:
         try:
             import psutil
             
-            proc = psutil.Process(pid)
+            # 检查是否需要创建新的进程对象
+            # 如果PID变化或进程对象不存在，需要重新创建
+            if self._qq_process is None or self._qq_process.pid != pid:
+                self._qq_process = psutil.Process(pid)
+                # 首次调用cpu_percent进行初始化（返回0，但会记录采样点）
+                self._qq_process.cpu_percent(interval=0)
+                logger.debug(f"创建QQ进程对象，PID: {pid}，首次采样已完成")
             
-            # 获取CPU使用率（interval=None使用上次调用以来的值）
-            cpu = proc.cpu_percent(interval=None)
+            # 验证进程是否仍在运行
+            if not self._qq_process.is_running():
+                self._qq_process = None
+                self._qq_pid = None
+                self._qq_resources = {"cpu": 0.0, "memory": 0.0}
+                return
+            
+            # 获取CPU使用率（使用缓存的进程对象，可以正确计算）
+            cpu = self._qq_process.cpu_percent(interval=0)
             
             # 获取内存使用量（使用RSS - 物理内存占用）
-            mem_info = proc.memory_info()
+            mem_info = self._qq_process.memory_info()
             memory = mem_info.rss / (1024 * 1024)  # 转换为MB
             
             self._qq_resources = {
                 "cpu": cpu,
                 "memory": memory
             }
-            logger.info(f"QQ资源占用 - PID: {pid}, CPU: {cpu:.1f}%, 内存: {memory:.1f}MB")
+            logger.debug(f"QQ资源占用 - PID: {pid}, CPU: {cpu:.1f}%, 内存: {memory:.1f}MB")
             
         except psutil.NoSuchProcess:
             logger.debug(f"QQ进程 {pid} 不存在")
+            self._qq_process = None
             self._qq_pid = None
             self._qq_resources = {"cpu": 0.0, "memory": 0.0}
         except psutil.AccessDenied:

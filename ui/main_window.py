@@ -293,8 +293,11 @@ class MainWindow:
         
         # 淡出效果
         self.content_area.opacity = 0
-        if self.page:
-            self.page.update()
+        try:
+            if self.page:
+                self.page.update()
+        except AssertionError:
+            pass  # 忽略控件未添加到页面的错误
         
         # 切换内容区域
         if index == 0:
@@ -314,8 +317,11 @@ class MainWindow:
         
         # 淡入效果
         self.content_area.opacity = 1
-        if self.page:
-            self.page.update()
+        try:
+            if self.page:
+                self.page.update()
+        except AssertionError:
+            pass  # 忽略控件未添加到页面的错误
         
         # 首页资源刷新放在页面显示之后，避免阻塞
         if index == 0:

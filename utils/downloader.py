@@ -57,6 +57,54 @@ class Downloader:
         """
         return self.find_in_path("node.exe") or self.find_in_path("node")
     
+    def get_node_version(self, node_path: str) -> Optional[int]:
+        """获取Node.js的主版本号
+        
+        Args:
+            node_path: node可执行文件的路径
+            
+        Returns:
+            主版本号（如22），获取失败返回None
+        """
+        import subprocess
+        import re
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        try:
+            result = subprocess.run(
+                [node_path, "--version"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.returncode == 0:
+                # 版本格式: v22.0.0 或 v18.17.1
+                version_str = result.stdout.strip()
+                match = re.match(r'v(\d+)', version_str)
+                if match:
+                    major_version = int(match.group(1))
+                    logger.info(f"Node.js版本: {version_str} (主版本: {major_version})")
+                    return major_version
+        except Exception as e:
+            logger.warning(f"获取Node.js版本失败: {e}")
+        return None
+    
+    def check_node_version_valid(self, node_path: str, min_version: int = 22) -> bool:
+        """检查Node.js版本是否满足最低要求
+        
+        Args:
+            node_path: node可执行文件的路径
+            min_version: 最低版本要求，默认22
+            
+        Returns:
+            版本满足要求返回True，否则返回False
+        """
+        version = self.get_node_version(node_path)
+        if version is None:
+            return False
+        return version >= min_version
+    
     def check_ffmpeg_available(self) -> Optional[str]:
         """检查系统是否已安装FFmpeg
         

@@ -192,7 +192,7 @@ class LLOneBotConfigPage:
         # 主界面内容（所有内容放在一个Column里）
         main_content = ft.Column([
             ft.Row([ft.Icon(ft.Icons.TUNE, size=36, color=ft.Colors.PRIMARY),
-                    ft.Text("LLOneBot 配置", size=32, weight=ft.FontWeight.BOLD)], spacing=12),
+                    ft.Text("LLBot 配置", size=32, weight=ft.FontWeight.BOLD)], spacing=12),
             ft.Divider(height=2, thickness=2, color=ft.Colors.PRIMARY),
             self.no_uin_container,
             self.config_content,

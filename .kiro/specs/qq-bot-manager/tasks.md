@@ -395,3 +395,134 @@
 
 - [ ] 21. 检查点 - 确保下载功能测试通过
   - 确保所有测试通过，如有问题请询问用户
+
+- [x] 22. 无头模式的登录功能
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+当使用无头模式登录时，弹出一个登录框，登录框有快速登录和扫码登录模式
+HTTP POST http://127.0.0.1:<pmhq-port>
+
+post json
+```json
+{
+  "type" : "call",
+  "data" : {
+    "func" : "loginService.getLoginList",
+    "args": []
+  }
+}
+```
+
+response json
+```json
+{
+    "type": "call",
+    "data": {
+        "echo": "5a67aadd-e261-411f-97a5-c8ea55f85c39",
+        "result": {
+            "result": 0,
+            "LocalLoginInfoList": [
+                {
+                    "uin": "379450326",
+                    "uid": "u_snYxnEfja-Po_cdFcyccRQ",
+                    "nickName": "林雨辰的猫找到了",
+                    "faceUrl": "https://thirdqq.qlogo.cn/g?b=sdk&k=gRFDbALSu8ZtUpLdCpBYIw&kti=aRPyvhHya-I&s=640&t=1729758283",
+                    "facePath": "C:\\Users\\linyu\\Documents\\Tencent Files\\379450326\\nt_qq\\nt_data\\avatar\\user\\92\\b_92974107e59d46994777b6dda07c4469",
+                    "loginType": 1,
+                    "isQuickLogin": true,
+                    "isAutoLogin": false,
+                    "isUserLogin": true
+                },
+                {
+                    "uin": "721011692",
+                    "uid": "u_qjD9LXs5B-OSCDKBAXTd-w",
+                    "nickName": "测试昵称",
+                    "faceUrl": "https://thirdqq.qlogo.cn/g?b=sdk&k=6t11HsgLWPjqRJyPXt2iaLA&kti=aRgYwBHya-E&s=640&t=1748765988",
+                    "facePath": "C:\\Users\\linyu\\Documents\\Tencent Files\\721011692\\nt_qq\\nt_data\\avatar\\user\\fd\\b_fd8a14c2e331ab022b6d77735fc4f195",
+                    "loginType": 1,
+                    "isQuickLogin": true,
+                    "isAutoLogin": false,
+                    "isUserLogin": false
+                }
+            ]
+        }
+    }
+}
+```
+
+再过滤出 isQuickLogin  && !isUserLogin 的账号，就是可以用于快速登录的账号
+
+点击登录就提交 json
+```json
+quickLoginWithUin
+{
+  "type" : "call",
+  "data" : {
+    "func" : "loginService.quickLoginWithUin",
+    "args": ["快速登录的uin"]
+  }
+}
+```
+登录response
+```json
+{
+    "type": "call",
+    "data": {
+        "echo": "5a7a9a50-9343-482f-b23a-7210cdd7a323",
+        "result": {
+            "result": "3",  // 0为成功
+            "loginErrorInfo": {
+                "step": 0,
+                "errMsg": "登录态已失效，请重新登录。",
+                "proofWaterUrl": "",
+                "newDevicePullQrCodeSig": {},
+                "jumpUrl": "",
+                "jumpWord": "",
+                "tipsTitle": "",
+                "tipsContent": "",
+                "unusualDeviceQrSig": "",
+                "uinToken": ""
+            }
+        }
+    }
+}
+```
+
+同时修改自动登录QQ号那里的逻辑，现在是把自动登录的QQ号传给了pmhq，现在改成使用HTTP接口登录，需要把登录结果show出来，如果登录失败就弹出失败原因和登录框
+
+如果没有可用于快速登录的账号，就调用获取二维码接口
+```json
+getQrCode
+{
+  "type" : "call",
+  "data" : {
+    "func" : "loginService.getQrCode",
+    "args": []
+  }
+}
+```
+调用这个接口之前要建立一个 SSE 通信，GET http://127.0.0.1:<pmhq-port>，用于获取二维码的
+
+SSE 会返回 data
+```json
+{"type":"nodeIKernelLoginListener","data":{"sub_type":"onQRCodeGetPicture","data":{"pngBase64QrcodeData":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAJMAAACTAQAAAACinha4AAAACXBIWXMAAAsTAAALEwEAmpwYAAACC0lEQVRIid2WP86lIBTFr6Gg0w2QsA06tqQbUNnAc0t0bIOEDUhHYbxz/N6b+SaZhptMMRligT8Tcu6/g8R/Lvqv2Uk0e5qi2VKeIg0SVvlavQ2JpnYtCa8SFs3SrpmuIV5TokXK0rU1e7q8ydlKilPZvZmkjCG/vMjuZIbv2LoY8rck83m+c9rFsGoyRPaI6viuZRe7XSZnD86j553yImEVQWjL0QY2sxaymElf5GlIZmq0iRiX8CTe7g66rkHEGuJQt6fVq5BUkLDT25PU6coR+dZ8yBiN2t5IYbScbJCwyvbWavf8+k1fL0OPM1SU06nQ3jXvZbe3tZUQy8GoXqkipq9REzp09Tj4HUcv46ZOr3adV59HV1jCTv2cNEJRzEPMk4TVhsNoxYQxZssMEsbYJns/k4FTzSRhSF7lvEUzftV/kLBbY6BRcCJf4A2bhNVoj6QQDQxpSuWQME55SNfsYCS2fvq0m0VsaXVPELNjETs9LKS8nNodmu7nbPUxjhwSnF6dlMm/fbeXQcgWkTne9bW0ImKM5LHaqdSooIglDClHmywxLwlfzCZhWCfGiwoMKfDbD3rZc8/E8viBfryEJQxaZnpChwVW/qWvj+Fe1RhrVAAmag8hm3FXwE4S+t2ykK1Q0crLQ4itIoY4vMUVtz8d95mZTob8wYemxqHlrykRsL/9r/dvsx8fETcdisW2KgAAAABJRU5ErkJggg==","qrcodeUrl":"https://txz.qq.com/p?k=J1CzHoZaqKpMjk2jraUdPJknhAnwDSLk&f=1600001604","expireTime":120,"pollTimeInterval":2}}}
+```
+同时修改不停获取uin的那个逻辑，如果获取到了uin就表示登录成功，登录弹框就消失
+
+登录框上的切换账号就是list出所有可用于快速登录的账号，如果有可用快速登录的账号，就显示第一个为默认的
+
+点击扫码登录就是走扫码登录的流程
+
+登录框样式参考![快速登录](./img/快速登录.png),![切换账号](./img/切换账号.png),![扫码登录](./img/扫码登录.png)

@@ -386,6 +386,9 @@ class LogPreviewCard:
                 ], spacing=6, vertical_alignment=ft.CrossAxisAlignment.START)
                 
                 self.log_list.controls.append(log_text)
+            
+            # 自动滚动到最新日志
+            self.log_list.scroll_to(offset=-1, duration=100)
 
 
 class HomePage:
@@ -433,6 +436,10 @@ class HomePage:
         # 日志实时更新相关
         self._log_update_scheduled = False
         self._log_update_lock = __import__('threading').Lock()
+        
+        # 进程对象缓存（用于正确计算CPU使用率）
+        # cpu_percent(interval=0) 需要在同一个Process对象上多次调用才能返回正确值
+        self._process_cache = {}  # {pid: psutil.Process}
         
         # 注册日志回调
         if self.log_collector:
@@ -560,15 +567,15 @@ class HomePage:
             # 日志预览（标题已包含在 LogPreviewCard 中）
             ft.Container(
                 content=self.log_card.control,
-                height=340,
+                height=280,
             ),
             
             # 底部留白，给悬浮按钮腾出空间
-            ft.Container(height=80),
-        ], spacing=20, scroll=ft.ScrollMode.AUTO)
+            ft.Container(height=50),
+        ], spacing=16, scroll=ft.ScrollMode.AUTO)
         
         self.control = ft.Stack([
-            ft.Container(content=main_content, padding=28, expand=True),
+            ft.Container(content=main_content, padding=24, expand=True),
             floating_button,
         ], expand=True)
         
@@ -857,8 +864,10 @@ class HomePage:
             self._show_error_dialog("停止失败", str(ex))
     
     def _on_global_start_click(self, e):
-        """��局启动按钮点击处理"""
+        """全局启动按钮点击处理"""
         import logging
+        from datetime import datetime
+        from core.log_collector import LogEntry
         logger = logging.getLogger(__name__)
         logger.info("全局启动按钮被点击")
         
@@ -866,12 +875,32 @@ class HomePage:
             logger.info("正在下载中，忽略点击")
             return
         
+        # 立即更新按钮状态为"已启动"，提供即时反馈
+        self._update_button_state(True)
+        
+        # 添加"正在启动..."日志
+        if self.log_collector:
+            entry = LogEntry(
+                timestamp=datetime.now(),
+                process_name="系统",
+                level="stdout",
+                message="正在启动..."
+            )
+            self.log_collector._logs.append(entry)
+            # 触发回调更新UI
+            for callback in self.log_collector._callbacks:
+                try:
+                    callback(entry)
+                except Exception:
+                    pass
+        
         # 获取配置
         try:
             config = self.config_manager.load_config()
             logger.info(f"配置加载成功: {config}")
         except Exception as ex:
             logger.error(f"配置加载失败: {ex}")
+            self._update_button_state(False)  # 恢复按钮状态
             self._show_error_dialog("配置加载失败", str(ex))
             return
         
@@ -891,20 +920,33 @@ class HomePage:
         logger.info(f"PMHQ文件存在: {pmhq_exists}")
         
         # 检查Node.exe文件是否存在（先检查配置路径，再检查环境变量，最后检查bin/llonebot/node.exe）
+        # 同时检查版本是否 >= 22
         node_exists = self.downloader.check_file_exists(node_path)
+        if node_exists:
+            # 检查版本
+            if not self.downloader.check_node_version_valid(node_path):
+                logger.warning(f"配置路径的Node.js版本低于22: {node_path}")
+                node_exists = False
+        
         if not node_exists:
             # 尝试从环境变量查找
             system_node = self.downloader.check_node_available()
             if system_node:
-                logger.info(f"在系统PATH中找到Node.js: {system_node}")
-                node_exists = True
-                # 更新配置使用系统的node
-                config["node_path"] = system_node
-                self.config_manager.save_config(config)
-            else:
+                # 检查版本是否 >= 22
+                if self.downloader.check_node_version_valid(system_node):
+                    logger.info(f"在系统PATH中找到Node.js (版本>=22): {system_node}")
+                    node_exists = True
+                    # 更新配置使用系统的node
+                    config["node_path"] = system_node
+                    self.config_manager.save_config(config)
+                else:
+                    logger.warning(f"系统PATH中的Node.js版本低于22: {system_node}")
+            
+            if not node_exists:
                 # 检查 bin/llonebot/node.exe
                 local_node_path = "bin/llonebot/node.exe"
                 if self.downloader.check_file_exists(local_node_path):
+                    # 本地下载的node不需要检查版本（我们下载的肯定是新版）
                     logger.info(f"在本地目录找到Node.js: {local_node_path}")
                     node_exists = True
                     # 更新配置使用本地的node
@@ -1067,10 +1109,13 @@ class HomePage:
                     self.download_dialog.open = False
                     self.page.update()
                 
-                # 检查Node.exe是否需要下载
+                # 检查Node.exe是否需要下载（同时检查版本 >= 22）
                 config = self.config_manager.load_config()
                 node_path = config.get("node_path", DEFAULT_CONFIG["node_path"])
                 node_exists = self.downloader.check_file_exists(node_path)
+                if node_exists and not self.downloader.check_node_version_valid(node_path):
+                    logger.warning(f"配置路径的Node.js版本低于22: {node_path}")
+                    node_exists = False
                 
                 if not node_exists:
                     # 显示Node.exe下载对话框
@@ -1117,6 +1162,7 @@ class HomePage:
     def _on_download_cancel_click(self, e):
         """取消PMHQ下载按钮点击处理"""
         self.is_downloading = False
+        self._update_button_state(False)  # 恢复按钮状态
         if self.page:
             self.download_dialog.open = False
             self.page.update()
@@ -1234,6 +1280,7 @@ class HomePage:
     def _on_llonebot_download_cancel_click(self, e):
         """取消LLOneBot下载按钮点击处理"""
         self.is_downloading_llonebot = False
+        self._update_button_state(False)  # 恢复按钮状态
         if self.page:
             self.download_llonebot_dialog.open = False
             self.page.update()
@@ -1365,6 +1412,7 @@ class HomePage:
     def _on_node_download_cancel_click(self, e):
         """取消Node.exe下载按钮点击处理"""
         self.is_downloading_node = False
+        self._update_button_state(False)  # 恢复按钮状态
         if self.page:
             self.download_node_dialog.open = False
             self.page.update()
@@ -1539,6 +1587,7 @@ class HomePage:
     def _on_ffmpeg_download_cancel_click(self, e):
         """取消FFmpeg.exe下载按钮点击处理"""
         self.is_downloading_ffmpeg = False
+        self._update_button_state(False)  # 恢复按钮状态
         if self.page:
             self.download_ffmpeg_dialog.open = False
             self.page.update()
@@ -1712,6 +1761,7 @@ class HomePage:
     def _on_ffprobe_download_cancel_click(self, e):
         """取消FFprobe.exe下载按钮点击处理"""
         self.is_downloading_ffprobe = False
+        self._update_button_state(False)  # 恢复按钮状态
         if self.page:
             self.download_ffprobe_dialog.open = False
             self.page.update()
@@ -1742,6 +1792,7 @@ class HomePage:
                     self.config_manager.save_config(config)
                 else:
                     logger.warning("未找到QQ路径")
+                    self._update_button_state(False)  # 恢复按钮状态
                     self._show_error_dialog(
                         "未找到QQ路径", 
                         "未能自动检测到QQ安装路径，请在「启动配置」中手动指定QQ路径，或安装QQ后重试。"
@@ -1751,14 +1802,18 @@ class HomePage:
             # 检查QQ路径是否真实存在
             if not Path(qq_path).exists():
                 logger.warning(f"QQ路径不存在: {qq_path}")
+                self._update_button_state(False)  # 恢复按钮状态
                 self._show_error_dialog(
                     "QQ路径无效", 
                     f"指定的QQ路径不存在：{qq_path}\n\n请在「启动配置」中重新指定正确的QQ路径。"
                 )
                 return
+            
             if self.downloader.check_file_exists(pmhq_path):
-                logger.info(f"正在启动PMHQ: {pmhq_path}, qq_path={qq_path}, auto_login_qq={auto_login_qq}, headless={headless}")
-                pmhq_success = self.process_manager.start_pmhq(pmhq_path, qq_path=qq_path, auto_login_qq=auto_login_qq, headless=headless)
+                # 无头模式下，不传递auto_login_qq给pmhq，改用HTTP API登录
+                pmhq_auto_login = "" if headless else auto_login_qq
+                logger.info(f"正在启动PMHQ: {pmhq_path}, qq_path={qq_path}, auto_login_qq={pmhq_auto_login}, headless={headless}")
+                pmhq_success = self.process_manager.start_pmhq(pmhq_path, qq_path=qq_path, auto_login_qq=pmhq_auto_login, headless=headless)
                 if pmhq_success:
                     pmhq_pid = self.process_manager.get_pid("pmhq")
                     logger.info(f"PMHQ启动成功，PID: {pmhq_pid}")
@@ -1770,57 +1825,248 @@ class HomePage:
                             logger.info("PMHQ进程已附加到日志收集器")
                         else:
                             logger.warning("PMHQ进程对象为空，无法收集日志（可能是以管理员权限单独启动的）")
+                    
+                    # 无头模式下，使用HTTP API进行登录
+                    if headless:
+                        self._handle_headless_login(auto_login_qq, config)
+                        return  # 登录流程会继续启动LLOneBot
                 else:
                     logger.error("PMHQ启动失败")
+                    self._update_button_state(False)  # 恢复按钮状态
                     self._show_error_dialog("启动失败", "PMHQ启动失败")
                     return
             
-            # 启动LLOneBot
-            node_path = config.get("node_path", DEFAULT_CONFIG["node_path"])
-            llonebot_path = config.get("llonebot_path", DEFAULT_CONFIG["llonebot_path"])
-            
-            # 检查node是否可用（配置路径 -> 环境变量 -> bin/llonebot/node.exe）
-            node_available = self.downloader.check_file_exists(node_path)
-            if not node_available:
-                # 尝试从环境变量查找
-                system_node = self.downloader.check_node_available()
-                if system_node:
-                    node_path = system_node
-                    node_available = True
-                else:
-                    # 检查 bin/llonebot/node.exe
-                    local_node_path = "bin/llonebot/node.exe"
-                    if self.downloader.check_file_exists(local_node_path):
-                        node_path = local_node_path
-                        node_available = True
-            
-            if node_available and self.downloader.check_file_exists(llonebot_path):
-                logger.info(f"正在启动LLOneBot: node={node_path}, script={llonebot_path}")
-                llbot_success = self.process_manager.start_llonebot(node_path, llonebot_path)
-                if llbot_success:
-                    llbot_pid = self.process_manager.get_pid("llonebot")
-                    logger.info(f"LLOneBot启动成功，PID: {llbot_pid}")
-                    # 将LLOneBot进程附加到日志收集器
-                    if self.log_collector:
-                        llbot_process = self.process_manager.get_process("llonebot")
-                        if llbot_process:
-                            self.log_collector.attach_process("LLOneBot", llbot_process)
-                            logger.info("LLOneBot进程已附加到日志收集器")
-                else:
-                    logger.error("LLOneBot启动失败")
-                    self._show_error_dialog("启动失败", "LLOneBot启动失败")
-            
-            # 更新按钮状态为"停止"
-            self._update_button_state(True)
-            
-            # 刷新进程资源显示
-            self.refresh_process_resources()
-            if self.page:
-                self.page.update()
+            # 继续启动LLOneBot
+            self._start_llonebot_service(config)
             
         except Exception as ex:
             logger.error(f"启动服务失败: {ex}")
+            self._update_button_state(False)  # 恢复按钮状态
             self._show_error_dialog("启动失败", str(ex))
+    
+    def _handle_headless_login(self, auto_login_qq: str, config: dict):
+        """处理无头模式登录
+        
+        Args:
+            auto_login_qq: 自动登录的QQ号
+            config: 配置字典
+        """
+        import logging
+        import threading
+        import time
+        logger = logging.getLogger(__name__)
+        
+        pmhq_port = self.process_manager.get_pmhq_port()
+        if not pmhq_port:
+            logger.error("无法获取PMHQ端口")
+            self._update_button_state(False)  # 恢复按钮状态
+            self._show_error_dialog("登录失败", "无法获取PMHQ端口")
+            return
+        
+        def login_thread():
+            # 等待PMHQ完全启动
+            time.sleep(2)
+            
+            from utils.login_service import LoginService
+            login_service = LoginService(pmhq_port)
+            
+            # 如果指定了自动登录QQ号，尝试快速登录
+            if auto_login_qq:
+                logger.info(f"尝试快速登录: {auto_login_qq}")
+                
+                # 获取可快速登录的账号列表
+                quick_accounts = login_service.get_quick_login_accounts()
+                
+                # 检查指定的QQ号是否在可快速登录列表中
+                target_account = None
+                for acc in quick_accounts:
+                    if acc.uin == auto_login_qq:
+                        target_account = acc
+                        break
+                
+                if target_account:
+                    # 尝试快速登录
+                    result = login_service.quick_login(auto_login_qq)
+                    if result.success:
+                        logger.info(f"快速登录成功: {auto_login_qq}")
+                        # 等待登录完成，然后启动LLOneBot
+                        self._wait_for_login_and_start_llonebot(config)
+                        return
+                    else:
+                        logger.warning(f"快速登录失败: {result.error_msg}")
+                        # 显示登录对话框
+                        async def show_login_dialog():
+                            self._show_login_dialog_with_error(pmhq_port, config, result.error_msg)
+                        if self.page:
+                            self.page.run_task(show_login_dialog)
+                        return
+                else:
+                    logger.warning(f"指定的QQ号 {auto_login_qq} 不在可快速登录列表中")
+            
+            # 没有指定自动登录QQ号，或者指定的QQ号不可用，显示登录对话框
+            async def show_login_dialog():
+                self._show_login_dialog(pmhq_port, config)
+            if self.page:
+                self.page.run_task(show_login_dialog)
+        
+        thread = threading.Thread(target=login_thread, daemon=True)
+        thread.start()
+    
+    def _wait_for_login_and_start_llonebot(self, config: dict):
+        """等待登录完成并启动LLOneBot
+        
+        Args:
+            config: 配置字典
+        """
+        import logging
+        import threading
+        import time
+        import requests
+        logger = logging.getLogger(__name__)
+        
+        pmhq_port = self.process_manager.get_pmhq_port()
+        if not pmhq_port:
+            return
+        
+        def wait_thread():
+            url = f"http://127.0.0.1:{pmhq_port}"
+            payload = {
+                "type": "call",
+                "data": {
+                    "func": "getSelfInfo",
+                    "args": []
+                }
+            }
+            
+            max_attempts = 60  # 最多等待60秒
+            for _ in range(max_attempts):
+                try:
+                    response = requests.post(url, json=payload, timeout=5)
+                    if response.status_code == 200:
+                        data = response.json()
+                        if data.get("type") == "call" and "data" in data:
+                            result = data["data"].get("result", {})
+                            uin = result.get("uin")
+                            if uin:
+                                logger.info(f"登录完成，uin: {uin}")
+                                # 在主线程中启动LLOneBot
+                                async def start_llonebot():
+                                    self._start_llonebot_service(config)
+                                if self.page:
+                                    self.page.run_task(start_llonebot)
+                                return
+                except Exception:
+                    pass
+                time.sleep(1)
+            
+            logger.warning("等待登录超时")
+        
+        thread = threading.Thread(target=wait_thread, daemon=True)
+        thread.start()
+    
+    def _show_login_dialog(self, pmhq_port: int, config: dict):
+        """显示登录对话框
+        
+        Args:
+            pmhq_port: PMHQ端口号
+            config: 配置字典
+        """
+        from ui.login_dialog import LoginDialog
+        
+        def on_login_success(uin: str):
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"登录成功: {uin}")
+            # 启动LLOneBot
+            self._start_llonebot_service(config)
+        
+        def on_cancel():
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info("用户取消登录")
+            # 更新按钮状态
+            self._update_button_state(True)
+            self.refresh_process_resources()
+            if self.page:
+                self.page.update()
+        
+        login_dialog = LoginDialog(
+            page=self.page,
+            pmhq_port=pmhq_port,
+            on_login_success=on_login_success,
+            on_cancel=on_cancel
+        )
+        login_dialog.show()
+    
+    def _show_login_dialog_with_error(self, pmhq_port: int, config: dict, error_msg: str):
+        """显示带错误信息的登录对话框
+        
+        Args:
+            pmhq_port: PMHQ端口号
+            config: 配置字典
+            error_msg: 错误信息
+        """
+        # 先显示错误提示
+        self._show_error_dialog("快速登录失败", error_msg)
+        
+        # 然后显示登录对话框
+        self._show_login_dialog(pmhq_port, config)
+    
+    def _start_llonebot_service(self, config: dict):
+        """启动LLOneBot服务
+        
+        Args:
+            config: 配置字典
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        node_path = config.get("node_path", DEFAULT_CONFIG["node_path"])
+        llonebot_path = config.get("llonebot_path", DEFAULT_CONFIG["llonebot_path"])
+        
+        # 检查node是否可用（配置路径 -> 环境变量 -> bin/llonebot/node.exe）
+        # 同时检查版本是否 >= 22
+        node_available = self.downloader.check_file_exists(node_path)
+        if node_available and not self.downloader.check_node_version_valid(node_path):
+            logger.warning(f"配置路径的Node.js版本低于22: {node_path}")
+            node_available = False
+        
+        if not node_available:
+            # 尝试从环境变量查找
+            system_node = self.downloader.check_node_available()
+            if system_node and self.downloader.check_node_version_valid(system_node):
+                node_path = system_node
+                node_available = True
+            else:
+                # 检查 bin/llonebot/node.exe
+                local_node_path = "bin/llonebot/node.exe"
+                if self.downloader.check_file_exists(local_node_path):
+                    node_path = local_node_path
+                    node_available = True
+        
+        if node_available and self.downloader.check_file_exists(llonebot_path):
+            logger.info(f"正在启动LLOneBot: node={node_path}, script={llonebot_path}")
+            llbot_success = self.process_manager.start_llonebot(node_path, llonebot_path)
+            if llbot_success:
+                llbot_pid = self.process_manager.get_pid("llonebot")
+                logger.info(f"LLOneBot启动成功，PID: {llbot_pid}")
+                # 将LLOneBot进程附加到日志收集器
+                if self.log_collector:
+                    llbot_process = self.process_manager.get_process("llonebot")
+                    if llbot_process:
+                        self.log_collector.attach_process("LLOneBot", llbot_process)
+                        logger.info("LLOneBot进程已附加到日志收集器")
+            else:
+                logger.error("LLOneBot启动失败")
+                self._show_error_dialog("启动失败", "LLOneBot启动失败")
+        
+        # 更新按钮状态为"停止"
+        self._update_button_state(True)
+        
+        # 刷新进程资源显示
+        self.refresh_process_resources()
+        if self.page:
+            self.page.update()
     
     def _show_error_dialog(self, title: str, message: str):
         """显示错误对话框"""
@@ -1869,6 +2115,46 @@ class HomePage:
         if self.on_navigate_logs:
             self.on_navigate_logs()
     
+    def _get_cached_process(self, pid: int) -> psutil.Process:
+        """获取缓存的进程对象，如果不存在或已失效则创建新的
+        
+        Args:
+            pid: 进程ID
+            
+        Returns:
+            psutil.Process对象
+            
+        Raises:
+            psutil.NoSuchProcess: 进程不存在
+        """
+        # 检查缓存中是否有该进程
+        if pid in self._process_cache:
+            proc = self._process_cache[pid]
+            # 验证进程是否仍然存在
+            if proc.is_running():
+                return proc
+            else:
+                # 进程已结束，从缓存中移除
+                del self._process_cache[pid]
+        
+        # 创建新的进程对象并缓存
+        proc = psutil.Process(pid)
+        self._process_cache[pid] = proc
+        # 首次调用cpu_percent进行初始化（返回0，但会记录采样点）
+        proc.cpu_percent(interval=0)
+        return proc
+    
+    def _cleanup_process_cache(self, valid_pids: set):
+        """清理不再需要的进程缓存
+        
+        Args:
+            valid_pids: 当前有效的PID集合
+        """
+        # 移除不在有效PID列表中的缓存
+        stale_pids = [pid for pid in self._process_cache if pid not in valid_pids]
+        for pid in stale_pids:
+            del self._process_cache[pid]
+    
     def refresh_process_resources(self):
         """刷新所有进程的资源使用情况
         
@@ -1881,16 +2167,22 @@ class HomePage:
             # 汇总Bot占用（管理器 + PMHQ + LLOneBot）
             total_cpu = 0.0
             total_mem = 0.0
-            any_running = False
+            
+            # 收集当前有效的PID
+            valid_pids = set()
             
             # 获取当前进程（管理器自身）
             manager_pid = os.getpid()
-            current_process = psutil.Process(manager_pid)
-            manager_cpu = current_process.cpu_percent(interval=0)
-            manager_mem = current_process.memory_info().rss / 1024 / 1024
-            total_cpu += manager_cpu
-            total_mem += manager_mem
-            logger.debug(f"管理器 - PID: {manager_pid}, CPU: {manager_cpu:.1f}%, 内存: {manager_mem:.1f}MB")
+            valid_pids.add(manager_pid)
+            try:
+                current_process = self._get_cached_process(manager_pid)
+                manager_cpu = current_process.cpu_percent(interval=0)
+                manager_mem = current_process.memory_info().rss / 1024 / 1024
+                total_cpu += manager_cpu
+                total_mem += manager_mem
+                logger.debug(f"管理器 - PID: {manager_pid}, CPU: {manager_cpu:.1f}%, 内存: {manager_mem:.1f}MB")
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass
             
             # 使用ProcessManager中的PID来监控进程
             pids = self.process_manager.get_all_pids()
@@ -1899,8 +2191,9 @@ class HomePage:
             pmhq_pid = pids.get("pmhq")
             pmhq_running = False
             if pmhq_pid:
+                valid_pids.add(pmhq_pid)
                 try:
-                    proc = psutil.Process(pmhq_pid)
+                    proc = self._get_cached_process(pmhq_pid)
                     pmhq_cpu = proc.cpu_percent(interval=0)
                     pmhq_mem = proc.memory_info().rss / 1024 / 1024
                     total_cpu += pmhq_cpu
@@ -1914,8 +2207,9 @@ class HomePage:
             llonebot_pid = pids.get("llonebot")
             llonebot_running = False
             if llonebot_pid:
+                valid_pids.add(llonebot_pid)
                 try:
-                    proc = psutil.Process(llonebot_pid)
+                    proc = self._get_cached_process(llonebot_pid)
                     llonebot_cpu = proc.cpu_percent(interval=0)
                     llonebot_mem = proc.memory_info().rss / 1024 / 1024
                     total_cpu += llonebot_cpu
@@ -1924,6 +2218,9 @@ class HomePage:
                     logger.debug(f"LLOneBot - PID: {llonebot_pid}, CPU: {llonebot_cpu:.1f}%, 内存: {llonebot_mem:.1f}MB")
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     pass
+            
+            # 清理不再需要的进程缓存
+            self._cleanup_process_cache(valid_pids)
             
             # Bot运行状态：PMHQ和LLOneBot都启动才算运行中
             bot_running = pmhq_running and llonebot_running

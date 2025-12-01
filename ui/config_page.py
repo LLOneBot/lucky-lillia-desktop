@@ -93,7 +93,7 @@ class ConfigPage:
         
         self.auto_login_qq_field = ft.TextField(
             label="自动登录QQ号",
-            hint_text="启动时自动登录的QQ号（可选）",
+            hint_text="启动时自动登录的QQ号",
             value=self.current_config.get("auto_login_qq", ""),
             width=250,
             keyboard_type=ft.KeyboardType.NUMBER,
