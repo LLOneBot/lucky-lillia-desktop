@@ -262,7 +262,16 @@ class AboutPage:
         )
         
         # GitHub仓库链接
-        github_links = []
+        github_links = [
+            ft.TextButton(
+                'QQ群：545402644',
+                icon=ft.Icons.OPEN_IN_NEW,
+                on_click=lambda e, url=f"https://qm.qq.com/q/4XrMj9iReU": self._open_url(url),
+                style=ft.ButtonStyle(
+                    color=ft.Colors.BLUE_600
+                )
+            )
+        ]
         for component, repo in GITHUB_REPOS.items():
             if repo and repo != "owner/pmhq" and repo != "owner/qq-bot-manager":
                 display_name = {
@@ -363,26 +372,26 @@ class AboutPage:
                 ], spacing=20),
                 
                 # GitHub链接
-                ft.Row([
-                    ft.Icon(ft.Icons.LINK, size=24, color=ft.Colors.PRIMARY),
-                    ft.Text(
-                        "相关链接",
-                        size=22,
-                        weight=ft.FontWeight.W_600
-                    ),
-                ], spacing=10),
+                # ft.Row([
+                #     ft.Icon(ft.Icons.LINK, size=24, color=ft.Colors.PRIMARY),
+                #     ft.Text(
+                #         "相关链接",
+                #         size=22,
+                #         weight=ft.FontWeight.W_600
+                #     ),
+                # ], spacing=10),
                 ft.Card(
                     content=ft.Container(
                         content=ft.Column([
                             ft.Row([
                                 ft.Icon(ft.Icons.CODE, size=20, color=ft.Colors.PRIMARY),
                                 ft.Text(
-                                    "GitHub仓库",
+                                    "相关链接",
                                     size=18,
                                     weight=ft.FontWeight.BOLD
                                 ),
                             ], spacing=10),
-                            ft.Divider(height=1, thickness=2),
+                            # ft.Divider(height=1, thickness=2),
                             ft.Column(
                                 github_links,
                                 spacing=12
