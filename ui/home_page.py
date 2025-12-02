@@ -835,20 +835,8 @@ class HomePage:
         logger.info(f"停止所有服务, stop_qq={stop_qq}")
         
         try:
-            # 如果需要停止QQ
-            if stop_qq:
-                qq_pid = self.process_manager.get_qq_pid()
-                if qq_pid:
-                    try:
-                        import psutil
-                        proc = psutil.Process(qq_pid)
-                        proc.terminate()
-                        logger.info(f"已终止QQ进程 (PID: {qq_pid})")
-                    except Exception as e:
-                        logger.warning(f"终止QQ进程失败: {e}")
-            
-            # 停止所有托管进程
-            self.process_manager.stop_all()
+            # 停止所有托管进程（包括QQ进程，如果stop_qq为True）
+            self.process_manager.stop_all(stop_qq=stop_qq)
             logger.info("所有服务已停止")
             
             # 更新按钮状态

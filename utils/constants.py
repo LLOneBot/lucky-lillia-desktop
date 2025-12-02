@@ -16,8 +16,9 @@ GITHUB_REPOS = {
     "app": "LLOneBot/lucky-lillia-desktop"
 }
 
-# 默认配置
+# 默认配置（合并了原 pmhq_config.json 和 app_settings.json）
 DEFAULT_CONFIG = {
+    # PMHQ 相关配置
     "qq_path": "",
     "pmhq_path": "bin/pmhq/pmhq-win-x64.exe",
     "llonebot_path": "bin/llonebot/llonebot.js",
@@ -27,20 +28,26 @@ DEFAULT_CONFIG = {
     "auto_start_pmhq": False,
     "auto_start_llonebot": False,
     "auto_start_bot": False,
+    "auto_login_qq": "",
     "headless": False,
+    "minimize_to_tray_on_start": False,
     "log_level": "info",
     "port": 3000,
     "npm_packages": {
         "pmhq": "pmhq",
         "llonebot": "llonebot",
         "app": "lucky-lillia-desktop"
-    }
+    },
+    # UI 相关配置
+    "theme_mode": "dark",
+    "window_width": 1200.0,
+    "window_height": 800.0,
+    "close_to_tray": False
 }
 
 # 应用设置
 APP_NAME = "幸运莉莉娅"
-CONFIG_FILE = "pmhq_config.json"
-SETTINGS_FILE = "app_settings.json"
+CONFIG_FILE = "app_settings.json"  # 统一配置文件
 
 # PMHQ路径设置
 PMHQ_DIR = "bin/pmhq"
@@ -82,3 +89,4 @@ DEFAULT_THEME = "light"
 # 托盘设置
 TRAY_TOOLTIP = "幸运莉莉娅 - QQ机器人管理器"
 CLOSE_TO_TRAY_DEFAULT = False  # 默认关闭时不收进托盘
+MINIMIZE_TO_TRAY_ON_START_DEFAULT = False  # 默认启动时不自动缩进托盘

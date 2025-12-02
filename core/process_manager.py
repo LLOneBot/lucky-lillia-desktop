@@ -559,19 +559,23 @@ class ProcessManager:
         with self._lock:
             return self._status.get(process_name, ProcessStatus.STOPPED)
     
-    def stop_all(self) -> None:
-        """停止所有托管进程"""
+    def stop_all(self, stop_qq: bool = True) -> None:
+        """停止所有托管进程
+        
+        Args:
+            stop_qq: 是否同时停止QQ进程，默认为True
+        """
         # 检查是否有任何进程在运行
         pty_processes = getattr(self, '_pty_processes', {})
         has_processes = bool(self._processes or self._admin_pids or pty_processes)
         
-        if not has_processes:
+        if not has_processes and not (stop_qq and self._qq_pid):
             # 没有运行的进程，快速退出
             logger.info("没有运行的进程，跳过清理")
             self._monitoring = False
             return
         
-        logger.info("停止所有托管进程...")
+        logger.info(f"停止所有托管进程... (stop_qq={stop_qq})")
         
         # 停止监控线程
         self._monitoring = False
@@ -587,6 +591,26 @@ class ProcessManager:
         admin_process_names = list(self._admin_pids.keys())
         for process_name in admin_process_names:
             self.stop_process(process_name)
+        
+        # 停止QQ进程
+        if stop_qq and self._qq_pid:
+            try:
+                import psutil
+                proc = psutil.Process(self._qq_pid)
+                proc.terminate()
+                try:
+                    proc.wait(timeout=2)
+                except psutil.TimeoutExpired:
+                    logger.warning(f"QQ进程没有响应，强制终止")
+                    proc.kill()
+                logger.info(f"已终止QQ进程 (PID: {self._qq_pid})")
+            except psutil.NoSuchProcess:
+                logger.debug(f"QQ进程 {self._qq_pid} 已不存在")
+            except Exception as e:
+                logger.warning(f"终止QQ进程失败: {e}")
+            finally:
+                self._qq_pid = None
+                self._qq_process = None
         
         logger.info("所有进程已停止")
     

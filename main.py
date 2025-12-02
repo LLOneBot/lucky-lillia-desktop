@@ -20,9 +20,8 @@ from core.log_collector import LogCollector
 from core.config_manager import ConfigManager
 from core.version_detector import VersionDetector
 from core.update_checker import UpdateChecker
-from utils.storage import Storage
 from utils.constants import (
-    SETTINGS_FILE, 
+    CONFIG_FILE,
     APP_NAME, 
     DEFAULT_WINDOW_WIDTH, 
     DEFAULT_WINDOW_HEIGHT,
@@ -117,10 +116,6 @@ def initialize_managers():
         logger.info("初始化更新检查器...")
         update_checker = UpdateChecker()
         
-        # 初始化本地存储
-        logger.info(f"初始化本地存储（文件: {SETTINGS_FILE}）...")
-        storage = Storage(SETTINGS_FILE)
-        
         logger.info("所有管理器初始化完成")
         
         return {
@@ -128,8 +123,7 @@ def initialize_managers():
             'log_collector': log_collector,
             'config_manager': config_manager,
             'version_detector': version_detector,
-            'update_checker': update_checker,
-            'storage': storage
+            'update_checker': update_checker
         }
         
     except Exception as e:
@@ -203,8 +197,7 @@ def main(page: ft.Page):
             log_collector=managers['log_collector'],
             config_manager=managers['config_manager'],
             version_detector=managers['version_detector'],
-            update_checker=managers['update_checker'],
-            storage=managers['storage']
+            update_checker=managers['update_checker']
         )
         
         # 构建UI

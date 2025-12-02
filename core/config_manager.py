@@ -1,4 +1,4 @@
-"""配置管理模块 - 负责读写和验证pmhq_config.json文件"""
+"""配置管理模块 - 负责读写和验证 app_settings.json 文件（统一配置）"""
 
 import json
 import os
@@ -14,7 +14,7 @@ class ConfigError(Exception):
 
 
 class ConfigManager:
-    """管理PMHQ配置文件"""
+    """统一配置管理器 - 管理所有应用配置"""
     
     def __init__(self, config_path: str = CONFIG_FILE):
         """初始化配置管理器
@@ -23,6 +23,7 @@ class ConfigManager:
             config_path: 配置文件路径
         """
         self.config_path = config_path
+        self._config_cache: Optional[Dict[str, Any]] = None
     
     def load_config(self) -> Dict[str, Any]:
         """加载配置文件
@@ -35,18 +36,24 @@ class ConfigManager:
         """
         # 如果文件不存在，返回默认配置
         if not os.path.exists(self.config_path):
-            return self.get_default_config()
+            self._config_cache = self.get_default_config()
+            return self._config_cache.copy()
         
         try:
             with open(self.config_path, 'r', encoding='utf-8') as f:
                 config = json.load(f)
             
+            # 合并默认配置（确保新增的配置项有默认值）
+            merged_config = self.get_default_config()
+            merged_config.update(config)
+            
             # 验证配置格式
-            is_valid, error_msg = self.validate_config(config)
+            is_valid, error_msg = self.validate_config(merged_config)
             if not is_valid:
                 raise ConfigError(f"配置文件格式无效: {error_msg}")
             
-            return config
+            self._config_cache = merged_config
+            return self._config_cache.copy()
         
         except json.JSONDecodeError as e:
             raise ConfigError(f"配置文件JSON格式错误: {str(e)}")
@@ -145,3 +152,57 @@ class ConfigManager:
     def get_default_config(self) -> Dict[str, Any]:
         """获取默认配置"""
         return DEFAULT_CONFIG.copy()
+    
+    # ========== 便捷方法（兼容原 Storage 类的接口）==========
+    
+    def load_setting(self, key: str, default: Any = None) -> Any:
+        """加载单个设置项
+        
+        Args:
+            key: 设置项的键
+            default: 如果键不存在时返回的默认值
+            
+        Returns:
+            设置项的值，如果不存在则返回default
+        """
+        if self._config_cache is None:
+            try:
+                self.load_config()
+            except ConfigError:
+                self._config_cache = self.get_default_config()
+        return self._config_cache.get(key, default)
+    
+    def save_setting(self, key: str, value: Any) -> bool:
+        """保存单个设置项
+        
+        Args:
+            key: 设置项的键
+            value: 设置项的值
+            
+        Returns:
+            保存成功返回True，失败返回False
+        """
+        # 每次保存前先从文件读取最新配置，避免覆盖其他设置
+        try:
+            self.load_config()
+        except ConfigError:
+            self._config_cache = self.get_default_config()
+        
+        self._config_cache[key] = value
+        return self._save_config_without_validation(self._config_cache)
+    
+    def _save_config_without_validation(self, config: Dict[str, Any]) -> bool:
+        """保存配置到文件（不进行严格验证，用于保存 UI 设置）
+        
+        Args:
+            config: 配置字典
+            
+        Returns:
+            保存成功返回True，失败返回False
+        """
+        try:
+            with open(self.config_path, 'w', encoding='utf-8') as f:
+                json.dump(config, f, indent=2, ensure_ascii=False)
+            return True
+        except IOError:
+            return False

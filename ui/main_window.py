@@ -13,7 +13,6 @@ from ui.config_page import ConfigPage
 from ui.llonebot_config_page import LLOneBotConfigPage
 from ui.about_page import AboutPage
 from ui.theme import apply_theme, toggle_theme, get_current_theme_mode
-from utils.storage import Storage
 from utils.constants import (
     APP_NAME, 
     DEFAULT_WINDOW_WIDTH, 
@@ -35,8 +34,7 @@ class MainWindow:
                  log_collector: LogCollector,
                  config_manager: ConfigManager,
                  version_detector: VersionDetector,
-                 update_checker: UpdateChecker,
-                 storage: Storage):
+                 update_checker: UpdateChecker):
         """初始化主窗口
         
         Args:
@@ -45,14 +43,12 @@ class MainWindow:
             config_manager: 配置管理器实例
             version_detector: 版本检测器实例
             update_checker: 更新检查器实例
-            storage: 本地存储实例
         """
         self.process_manager = process_manager
         self.log_collector = log_collector
         self.config_manager = config_manager
         self.version_detector = version_detector
         self.update_checker = update_checker
-        self.storage = storage
         
         self.page: Optional[ft.Page] = None
         self.current_page_index = 0
@@ -79,14 +75,14 @@ class MainWindow:
         page.title = APP_NAME
         page.padding = 0  # 移除页面默认padding
         
-        # 从本地存储恢复窗口尺寸
-        window_width = self.storage.load_setting("window_width", DEFAULT_WINDOW_WIDTH)
-        window_height = self.storage.load_setting("window_height", DEFAULT_WINDOW_HEIGHT)
+        # 从配置恢复窗口尺寸
+        window_width = self.config_manager.load_setting("window_width", DEFAULT_WINDOW_WIDTH)
+        window_height = self.config_manager.load_setting("window_height", DEFAULT_WINDOW_HEIGHT)
         page.window.width = window_width
         page.window.height = window_height
         
-        # 从本地存储恢复主题
-        theme_mode = self.storage.load_setting("theme_mode", DEFAULT_THEME)
+        # 从配置恢复主题
+        theme_mode = self.config_manager.load_setting("theme_mode", DEFAULT_THEME)
         apply_theme(page, theme_mode)
         
         # 注册窗口关闭事件
@@ -272,6 +268,9 @@ class MainWindow:
         
         # 检查是否需要自动启动bot
         self._check_auto_start_bot()
+        
+        # 检查是否需要启动后自动缩进托盘
+        self._check_minimize_to_tray_on_start()
     
     def _on_nav_change(self, e):
         """导航栏选择变化处理
@@ -341,7 +340,7 @@ class MainWindow:
             )
             
             # 保存主题设置
-            self.storage.save_setting("theme_mode", new_theme)
+            self.config_manager.save_setting("theme_mode", new_theme)
             
             self.page.update()
     
@@ -429,7 +428,7 @@ class MainWindow:
         """
         if e.data == "close":
             # 检查用户是否已经记住了选择
-            close_to_tray = self.storage.load_setting("close_to_tray", None)
+            close_to_tray = self.config_manager.load_setting("close_to_tray", None)
             
             if close_to_tray is True:
                 # 用户选择了收进托盘
@@ -493,7 +492,7 @@ class MainWindow:
         
         # 如果用户选择记住，保存设置
         if self.remember_choice:
-            self.storage.save_setting("close_to_tray", to_tray)
+            self.config_manager.save_setting("close_to_tray", to_tray)
         
         if to_tray:
             self._minimize_to_tray()
@@ -510,6 +509,9 @@ class MainWindow:
         """从托盘恢复窗口"""
         if self.page:
             self.page.window.visible = True
+            # 如果窗口被最小化，先恢复窗口
+            if self.page.window.minimized:
+                self.page.window.minimized = False
             self.page.window.focused = True
             self.page.update()
     
@@ -617,8 +619,8 @@ class MainWindow:
         # 保存窗口尺寸（强制清理时跳过）
         if not force_cleanup and self.page:
             try:
-                self.storage.save_setting("window_width", self.page.window.width)
-                self.storage.save_setting("window_height", self.page.window.height)
+                self.config_manager.save_setting("window_width", self.page.window.width)
+                self.config_manager.save_setting("window_height", self.page.window.height)
             except Exception:
                 pass  # 忽略保存失败
         
@@ -800,6 +802,9 @@ class MainWindow:
         """托盘菜单：显示主窗口"""
         if self.page:
             self.page.window.visible = True
+            # 如果窗口被最小化，先恢复窗口
+            if self.page.window.minimized:
+                self.page.window.minimized = False
             self.page.window.focused = True
             self.page.update()
     
@@ -845,6 +850,30 @@ class MainWindow:
             import logging
             logger = logging.getLogger(__name__)
             logger.warning(f"自动启动bot失败: {e}")
+    
+    def _check_minimize_to_tray_on_start(self):
+        """检查是否需要启动后自动缩进托盘"""
+        try:
+            # 加载配置
+            config = self.config_manager.load_config()
+            minimize_to_tray_on_start = config.get("minimize_to_tray_on_start", False)
+            
+            if minimize_to_tray_on_start:
+                # 延迟一点执行，确保托盘已初始化
+                import threading
+                def delayed_minimize():
+                    time.sleep(2.5)  # 等待托盘初始化完成
+                    if self.page:
+                        self._minimize_to_tray()
+                
+                minimize_thread = threading.Thread(target=delayed_minimize, daemon=True)
+                minimize_thread.start()
+                
+        except Exception as e:
+            # 忽略自动缩进托盘过程中的错误
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"自动缩进托盘失败: {e}")
     
     def _monitor_resources(self):
         """监控系统资源使用情况"""

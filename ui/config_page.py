@@ -109,6 +109,11 @@ class ConfigPage:
             value=self.current_config.get("headless", False),
         )
         
+        self.minimize_to_tray_on_start_checkbox = ft.Checkbox(
+            label="启动后自动缩进托盘",
+            value=self.current_config.get("minimize_to_tray_on_start", False),
+        )
+        
         # 错误提示文本
         self.error_text = ft.Text(
             "",
@@ -210,6 +215,7 @@ class ConfigPage:
                         self.auto_login_qq_field,
                         self.auto_start_bot_checkbox,
                         self.headless_checkbox,
+                        self.minimize_to_tray_on_start_checkbox,
                     ], spacing=16),
                     padding=24,
                 ),
@@ -320,17 +326,22 @@ class ConfigPage:
         self.error_text.visible = False
         self.success_text.visible = False
         
-        # 收集配置数据
+        # 先加载现有配置，保留其他设置（如 UI 设置）
         try:
-            config = {
-                "qq_path": self.qq_path_field.value.strip(),
-                "pmhq_path": self.pmhq_path_field.value.strip(),
-                "llonebot_path": self.llonebot_path_field.value.strip(),
-                "node_path": self.node_path_field.value.strip(),
-                "auto_login_qq": self.auto_login_qq_field.value.strip(),
-                "auto_start_bot": self.auto_start_bot_checkbox.value,
-                "headless": self.headless_checkbox.value,
-            }
+            config = self.config_manager.load_config()
+        except ConfigError:
+            config = self.config_manager.get_default_config()
+        
+        # 更新页面上的配置项
+        try:
+            config["qq_path"] = self.qq_path_field.value.strip()
+            config["pmhq_path"] = self.pmhq_path_field.value.strip()
+            config["llonebot_path"] = self.llonebot_path_field.value.strip()
+            config["node_path"] = self.node_path_field.value.strip()
+            config["auto_login_qq"] = self.auto_login_qq_field.value.strip()
+            config["auto_start_bot"] = self.auto_start_bot_checkbox.value
+            config["headless"] = self.headless_checkbox.value
+            config["minimize_to_tray_on_start"] = self.minimize_to_tray_on_start_checkbox.value
         except ValueError:
             self._show_error("配置数据无效")
             return
@@ -394,6 +405,7 @@ class ConfigPage:
             self.auto_login_qq_field.value = self.current_config.get("auto_login_qq", "")
             self.auto_start_bot_checkbox.value = self.current_config.get("auto_start_bot", False)
             self.headless_checkbox.value = self.current_config.get("headless", False)
+            self.minimize_to_tray_on_start_checkbox.value = self.current_config.get("minimize_to_tray_on_start", False)
             
             # 隐藏提示
             self.error_text.visible = False
