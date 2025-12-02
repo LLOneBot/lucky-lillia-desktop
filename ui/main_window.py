@@ -48,6 +48,9 @@ class MainWindow:
         self.log_collector = log_collector
         self.config_manager = config_manager
         self.version_detector = version_detector
+        
+        # 用于快速中断资源监控线程的事件
+        self._stop_monitoring_event = threading.Event()
         self.update_checker = update_checker
         
         self.page: Optional[ft.Page] = None
@@ -444,20 +447,19 @@ class MainWindow:
         """显示关闭确认对话框"""
         self.remember_choice = False
         
-        remember_checkbox = ft.Checkbox(
-            label="记住我的选择",
-            value=False,
-            on_change=lambda e: setattr(self, 'remember_choice', e.control.value)
-        )
-        
         self.close_dialog = ft.AlertDialog(
             modal=True,
-            title=ft.Text("关闭窗口"),
-            content=ft.Column([
-                ft.Text("请选择关闭方式："),
-                ft.Container(height=10),
-                remember_checkbox,
-            ], tight=True),
+            title=ft.Text("关闭窗口", text_align=ft.TextAlign.CENTER, width=250),
+            content=ft.Row(
+                [
+                    ft.Checkbox(
+                        label="记住我的选择",
+                        value=False,
+                        on_change=lambda e: setattr(self, 'remember_choice', e.control.value)
+                    ),
+                ],
+                alignment=ft.MainAxisAlignment.CENTER,
+            ),
             actions=[
                 ft.TextButton(
                     "收进托盘",
@@ -505,20 +507,6 @@ class MainWindow:
             self.page.window.visible = False
             self.page.update()
     
-    def _show_closing_dialog(self):
-        """显示正在关闭的 loading 对话框"""
-        closing_dialog = ft.AlertDialog(
-            modal=True,
-            content=ft.Row([
-                ft.ProgressRing(width=24, height=24, stroke_width=2),
-                ft.Text("正在关闭...", size=14),
-            ], spacing=12, alignment=ft.MainAxisAlignment.CENTER),
-            content_padding=ft.padding.symmetric(horizontal=24, vertical=16),
-        )
-        self.page.overlay.append(closing_dialog)
-        closing_dialog.open = True
-        self.page.update()
-    
     def _restore_from_tray(self, e=None):
         """从托盘恢复窗口"""
         if self.page:
@@ -535,10 +523,6 @@ class MainWindow:
         Args:
             force_exit: 是否强制快速退出（用于更新重启）
         """
-        # 显示关闭中的 loading 对话框
-        if self.page and not force_exit:
-            self._show_closing_dialog()
-        
         # 检查是否有待执行的应用更新（首页或关于页面）
         if self.home_page.has_pending_app_update():
             self._execute_pending_update(self.home_page.get_pending_update_script())
@@ -548,45 +532,10 @@ class MainWindow:
         # 窗口关闭时的清理逻辑
         self._cleanup(force_cleanup=force_exit)
         
-        # 对于更新重启，使用更快的退出方式
-        if force_exit:
-            # 更新重启时，强制终止所有可能残留的进程，然后退出
-            import os
-            import sys
-            
-            # 尝试强制终止当前进程树中的所有子进程
-            try:
-                import psutil
-                current_process = psutil.Process()
-                children = current_process.children(recursive=True)
-                for child in children:
-                    try:
-                        child.terminate()
-                    except (psutil.NoSuchProcess, psutil.AccessDenied):
-                        pass
-                
-                # 等待一小段时间让子进程退出
-                import time
-                time.sleep(0.3)
-                
-                # 强制杀死仍然存在的子进程
-                for child in children:
-                    try:
-                        if child.is_running():
-                            child.kill()
-                    except (psutil.NoSuchProcess, psutil.AccessDenied):
-                        pass
-            except ImportError:
-                # 如果没有psutil，使用简单的等待
-                import time
-                time.sleep(0.5)
-            
-            # 强制退出主进程
-            os._exit(0)
-        else:
-            # 正常退出时，使用标准方式
-            if self.page:
-                self.page.window.destroy()
+        # 关闭窗口 - 取消阻止关闭，让系统直接处理
+        if self.page:
+            self.page.window.prevent_close = False
+            self.page.window.close()
     
     def _execute_pending_update(self, script_path: str):
         """执行待处理的应用更新
@@ -610,32 +559,28 @@ class MainWindow:
         Args:
             force_cleanup: 是否强制清理（用于更新重启）
         """
-        # 停止资源监控
+        # 停止资源监控 - 设置事件立即中断等待
         self.monitoring_resources = False
+        self._stop_monitoring_event.set()  # 立即中断 Event.wait()
         if self.resource_monitor_thread and self.resource_monitor_thread.is_alive():
-            timeout = 0.2 if force_cleanup else 0.5
+            timeout = 0.1 if force_cleanup else 0.2  # 减少等待时间
             self.resource_monitor_thread.join(timeout=timeout)
         
         # 停止托盘图标
         if self.tray_icon:
             try:
-                if force_cleanup:
-                    # 强制清理时，直接停止，不使用异步
-                    self.tray_icon.stop()
-                else:
-                    # 正常清理时，使用异步
-                    import threading
-                    def stop_tray():
-                        try:
-                            self.tray_icon.stop()
-                        except Exception:
-                            pass
-                    threading.Thread(target=stop_tray, daemon=True).start()
+                # 总是异步停止托盘，避免阻塞
+                def stop_tray():
+                    try:
+                        self.tray_icon.stop()
+                    except Exception:
+                        pass
+                threading.Thread(target=stop_tray, daemon=True).start()
             except Exception:
                 pass
         
-        # 保存窗口尺寸（强制清理时跳过）
-        if not force_cleanup and self.page:
+        # 保存窗口尺寸
+        if self.page:
             try:
                 self.config_manager.save_setting("window_width", self.page.window.width)
                 self.config_manager.save_setting("window_height", self.page.window.height)
@@ -838,6 +783,7 @@ class MainWindow:
         """启动资源监控线程"""
         if not self.monitoring_resources:
             self.monitoring_resources = True
+            self._stop_monitoring_event.clear()  # 重置停止事件
             self.resource_monitor_thread = threading.Thread(
                 target=self._monitor_resources,
                 daemon=True
@@ -921,5 +867,7 @@ class MainWindow:
                 # 忽略监控过程中的错误
                 pass
             
-            # 等待指定间隔
-            time.sleep(RESOURCE_MONITOR_INTERVAL)
+            # 使用 Event.wait 替代 time.sleep，可以被快速中断
+            if self._stop_monitoring_event.wait(timeout=RESOURCE_MONITOR_INTERVAL):
+                # 如果事件被设置，立即退出循环
+                break

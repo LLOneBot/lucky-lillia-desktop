@@ -165,6 +165,29 @@ class ConfigPage:
             ], spacing=12),
             ft.Divider(height=2, thickness=2, color=ft.Colors.PRIMARY),
             
+            # 启动选项区域
+            ft.Row([
+                ft.Icon(ft.Icons.PLAY_CIRCLE, size=24, color=ft.Colors.PRIMARY),
+                ft.Text(
+                    "启动选项",
+                    size=22,
+                    weight=ft.FontWeight.W_600
+                ),
+            ], spacing=10),
+            ft.Card(
+                content=ft.Container(
+                    content=ft.Column([
+                        self.auto_login_qq_field,
+                        self.auto_start_bot_checkbox,
+                        self.headless_checkbox,
+                        self.minimize_to_tray_on_start_checkbox,
+                    ], spacing=16),
+                    padding=24,
+                ),
+                elevation=3,
+                surface_tint_color=ft.Colors.PRIMARY,
+            ),
+            
             # 路径配置区域
             ft.Row([
                 ft.Icon(ft.Icons.FOLDER, size=24, color=ft.Colors.PRIMARY),
@@ -193,29 +216,6 @@ class ConfigPage:
                             self.node_path_field,
                             self.node_path_button,
                         ], spacing=8),
-                    ], spacing=16),
-                    padding=24,
-                ),
-                elevation=3,
-                surface_tint_color=ft.Colors.PRIMARY,
-            ),
-            
-            # 启动选项区域
-            ft.Row([
-                ft.Icon(ft.Icons.PLAY_CIRCLE, size=24, color=ft.Colors.PRIMARY),
-                ft.Text(
-                    "启动选项",
-                    size=22,
-                    weight=ft.FontWeight.W_600
-                ),
-            ], spacing=10),
-            ft.Card(
-                content=ft.Container(
-                    content=ft.Column([
-                        self.auto_login_qq_field,
-                        self.auto_start_bot_checkbox,
-                        self.headless_checkbox,
-                        self.minimize_to_tray_on_start_checkbox,
                     ], spacing=16),
                     padding=24,
                 ),
