@@ -32,12 +32,6 @@ DEFAULT_CONFIG = {
     "headless": False,
     "minimize_to_tray_on_start": False,
     "log_level": "info",
-    "port": 3000,
-    "npm_packages": {
-        "pmhq": "pmhq",
-        "llonebot": "llonebot",
-        "app": "lucky-lillia-desktop"
-    },
     # UI 相关配置
     "theme_mode": "dark",
     "window_width": 1200.0,
