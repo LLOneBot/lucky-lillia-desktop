@@ -779,9 +779,30 @@ class ProcessManager:
     def fetch_qq_process_info(self) -> Optional[int]:
         """从PMHQ获取QQ进程信息
         
+        如果已经获取到PID且进程仍在运行，直接复用已有PID，避免重复调用API。
+        
         Returns:
             QQ进程PID，如果获取失败返回None
         """
+        # 如果已有PID，先检查进程是否仍在运行
+        if self._qq_pid is not None:
+            try:
+                import psutil
+                if psutil.pid_exists(self._qq_pid):
+                    # 进程仍存在，更新资源占用并返回
+                    self._update_qq_resources(self._qq_pid)
+                    return self._qq_pid
+                else:
+                    # 进程已退出，清空缓存
+                    logger.info(f"QQ进程 {self._qq_pid} 已退出")
+                    self._qq_pid = None
+                    self._qq_process = None
+                    self._qq_resources = {"cpu": 0.0, "memory": 0.0}
+            except Exception as e:
+                logger.debug(f"检查QQ进程状态时发生异常: {e}")
+                self._qq_pid = None
+                self._qq_process = None
+        
         if self._pmhq_port is None:
             logger.debug("PMHQ端口未设置，无法获取QQ进程信息")
             return None

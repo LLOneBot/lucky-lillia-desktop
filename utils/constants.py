@@ -42,7 +42,7 @@ DEFAULT_CONFIG = {
     "theme_mode": "dark",
     "window_width": 1200.0,
     "window_height": 800.0,
-    "close_to_tray": False
+    "close_to_tray": None  # None 表示未选择，会弹窗询问
 }
 
 # 应用设置

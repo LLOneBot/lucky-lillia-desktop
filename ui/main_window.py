@@ -505,6 +505,20 @@ class MainWindow:
             self.page.window.visible = False
             self.page.update()
     
+    def _show_closing_dialog(self):
+        """显示正在关闭的 loading 对话框"""
+        closing_dialog = ft.AlertDialog(
+            modal=True,
+            content=ft.Row([
+                ft.ProgressRing(width=24, height=24, stroke_width=2),
+                ft.Text("正在关闭...", size=14),
+            ], spacing=12, alignment=ft.MainAxisAlignment.CENTER),
+            content_padding=ft.padding.symmetric(horizontal=24, vertical=16),
+        )
+        self.page.overlay.append(closing_dialog)
+        closing_dialog.open = True
+        self.page.update()
+    
     def _restore_from_tray(self, e=None):
         """从托盘恢复窗口"""
         if self.page:
@@ -521,6 +535,10 @@ class MainWindow:
         Args:
             force_exit: 是否强制快速退出（用于更新重启）
         """
+        # 显示关闭中的 loading 对话框
+        if self.page and not force_exit:
+            self._show_closing_dialog()
+        
         # 检查是否有待执行的应用更新（首页或关于页面）
         if self.home_page.has_pending_app_update():
             self._execute_pending_update(self.home_page.get_pending_update_script())
