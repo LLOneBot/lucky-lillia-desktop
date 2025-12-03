@@ -1,11 +1,15 @@
 """日志收集模块 - 收集和管理进程日志输出"""
 
+import logging
 import subprocess
 import threading
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional, List, Callable, Dict
+
+# 获取模块级别的 logger
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -31,6 +35,16 @@ class LogCollector:
         self._lock = threading.Lock()
         self._callbacks: List[Callable[[LogEntry], None]] = []
         self._reader_threads: Dict[str, List[threading.Thread]] = {}
+    
+    def _write_to_log_file(self, entry: LogEntry) -> None:
+        """将日志条目写入日志文件
+        
+        Args:
+            entry: 日志条目
+        """
+        # 使用 INFO 级别记录 stdout，WARNING 级别记录 stderr
+        log_level = logging.INFO if entry.level == "stdout" else logging.WARNING
+        logger.log(log_level, f"[{entry.process_name}] {entry.message}")
         
     def attach_process(self, process_name: str, process: subprocess.Popen) -> None:
         """附加到进程的输出流
@@ -83,8 +97,6 @@ class LogCollector:
             process_name: 进程名称
             pty_process: winpty.PtyProcess 对象
         """
-        import logging
-        logger = logging.getLogger(__name__)
         logger.info(f"开始读取 {process_name} 的 PTY 流")
         
         try:
@@ -102,10 +114,11 @@ class LogCollector:
                                 message=line
                             )
                             
-                            logger.debug(f"收到PTY日志: [{process_name}] {line[:100]}")
-                            
                             with self._lock:
                                 self._logs.append(entry)
+                            
+                            # 写入日志文件
+                            self._write_to_log_file(entry)
                             
                             # 调用回调函数
                             for callback in self._callbacks:
@@ -129,8 +142,6 @@ class LogCollector:
             stream: 输出流对象
             level: 日志级别 ("stdout" 或 "stderr")
         """
-        import logging
-        logger = logging.getLogger(__name__)
         logger.info(f"开始读取 {process_name} 的 {level} 流")
         
         try:
@@ -149,10 +160,11 @@ class LogCollector:
                         message=line
                     )
                     
-                    logger.debug(f"收到日志: [{process_name}][{level}] {line[:100]}")
-                    
                     with self._lock:
                         self._logs.append(entry)
+                    
+                    # 写入日志文件
+                    self._write_to_log_file(entry)
                     
                     # 调用回调函数
                     for callback in self._callbacks:
@@ -209,3 +221,5 @@ class LogCollector:
             callback: 回调函数，接收LogEntry参数
         """
         self._callbacks.append(callback)
+
+

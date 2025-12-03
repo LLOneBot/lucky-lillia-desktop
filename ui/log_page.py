@@ -2,7 +2,6 @@
 
 import flet as ft
 import threading
-import time
 from typing import List
 from core.log_collector import LogCollector, LogEntry
 
@@ -42,21 +41,21 @@ class LogPage:
             ),
         )
 
-        # 自动滚动开关
+        # 自动刷新开关（新日志时自动滚动到顶部）
         self.auto_scroll_switch = ft.Switch(
             label="自动滚动", value=True, on_change=self._on_auto_scroll_change
         )
 
-        # 日志显示区域
-        self.log_column = ft.Column(
+        # 日志显示区域 - 使用ListView实现虚拟滚动，只渲染可见区域
+        # 倒序显示，最新日志在顶部
+        self.log_list = ft.ListView(
             controls=[],
             spacing=2,
-            scroll=ft.ScrollMode.AUTO,
+            expand=True,
         )
 
-        # 使用ListView包装以支持自动滚动
         self.log_container = ft.Container(
-            content=self.log_column,
+            content=self.log_list,
             expand=True,
             bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.PRIMARY),
             border_radius=12,
@@ -124,7 +123,7 @@ class LogPage:
             self.control.page.update()
 
     def _on_auto_scroll_change(self, e):
-        """自动滚动开关变化处理"""
+        """自动刷新开关变化处理"""
         self.auto_scroll = e.control.value
 
     def _on_new_log(self, entry: LogEntry):
@@ -156,38 +155,37 @@ class LogPage:
             self._update_scheduled = False
 
         # 检查控件是否仍然有效
-        if not self.control or not self.control.page or not self.log_column:
+        if not self.control or not self.control.page or not self.log_list:
             return
 
         try:
-            # 批量添加日志到显示
-            for entry in logs_to_add:
+            # 倒序：新日志插入到顶部
+            for entry in reversed(logs_to_add):
                 log_widget = self._create_log_widget(entry)
-                self.log_column.controls.append(log_widget)
+                self.log_list.controls.insert(0, log_widget)
 
-            # 限制显示的日志数量以保持性能
-            if len(self.log_column.controls) > 1000:
-                self.log_column.controls = self.log_column.controls[-1000:]
+            # 限制显示的日志数量以保持性能（删除底部旧日志）
+            if len(self.log_list.controls) > 1000:
+                self.log_list.controls = self.log_list.controls[:1000]
 
-            # 更新UI
+            # 更新UI，如果启用自动刷新则滚动到顶部
             if self.control and self.control.page:
                 self.control.page.update()
-                # 如果启用自动滚动，滚动到底部
                 if self.auto_scroll:
-                    self.log_column.scroll_to(offset=-1, duration=0)
+                    self._scroll_to_top()
         except (AssertionError, Exception):
             pass  # 忽略更新错误，包括控件状态不一致的情况
 
     def _refresh_logs(self):
-        """刷新日志显示"""
+        """刷新日志显示（倒序，最新在顶部）"""
         logs = self.log_collector.get_logs()
 
         # 清空当前显示
-        self.log_column.controls.clear()
+        self.log_list.controls.clear()
 
-        # 添加日志
+        # 添加日志（倒序）
         if not logs:
-            self.log_column.controls.append(
+            self.log_list.controls.append(
                 ft.Container(
                     content=ft.Text(
                         "暂无日志",
@@ -201,9 +199,9 @@ class LogPage:
                 )
             )
         else:
-            for entry in logs:
+            for entry in reversed(logs):
                 log_widget = self._create_log_widget(entry)
-                self.log_column.controls.append(log_widget)
+                self.log_list.controls.append(log_widget)
 
     def _create_log_widget(self, entry: LogEntry) -> ft.Container:
         """创建日志显示组件
@@ -282,31 +280,17 @@ class LogPage:
         self._refresh_logs()
         if self.control and self.control.page:
             self.control.page.update()
-            self._scroll_to_bottom()
 
     def on_page_enter(self):
-        """进入页面时调用 - 刷新并滚动到底部"""
+        """进入页面时调用 - 刷新日志"""
         self._refresh_logs()
         if self.control and self.control.page:
             self.control.page.update()
-            # 延迟滚动到底部，确保UI已渲染
-            threading.Thread(target=self._delayed_scroll_to_bottom, daemon=True).start()
 
-    def _delayed_scroll_to_bottom(self):
-        """延迟滚动到底部"""
-        time.sleep(0.2)  # 等待UI渲染完成
-        self._scroll_to_bottom()
-
-    def _scroll_to_bottom(self):
-        """滚动到底部"""
-        if (
-            self.auto_scroll
-            and self.log_column.controls
-            and self.control
-            and self.control.page
-        ):
+    def _scroll_to_top(self):
+        """瞬间滚动到顶部（无动画）"""
+        if self.log_list and self.log_list.controls:
             try:
-                self.log_column.scroll_to(offset=-1, duration=0)
-                self.control.page.update()
+                self.log_list.scroll_to(offset=0, duration=0)
             except Exception:
                 pass

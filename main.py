@@ -51,7 +51,7 @@ def setup_logging():
     log_dir.mkdir(exist_ok=True)
     
     # 生成日志文件名（包含日期）
-    log_file = log_dir / f"app_{datetime.now().strftime('%Y%m%d')}.log"
+    log_file = log_dir / f"{datetime.now().strftime('%Y%m%d')}.log"
     
     # 配置日志格式
     logging.basicConfig(
