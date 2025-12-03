@@ -7,6 +7,7 @@ from core.log_collector import LogCollector
 from core.config_manager import ConfigManager
 from core.version_detector import VersionDetector
 from core.update_checker import UpdateChecker
+from core.update_manager import UpdateManager
 from ui.home_page import HomePage
 from ui.log_page import LogPage
 from ui.config_page import ConfigPage
@@ -22,6 +23,7 @@ from utils.constants import (
     TRAY_TOOLTIP,
     CLOSE_TO_TRAY_DEFAULT
 )
+from utils.downloader import Downloader
 import threading
 import time
 
@@ -48,10 +50,18 @@ class MainWindow:
         self.log_collector = log_collector
         self.config_manager = config_manager
         self.version_detector = version_detector
+        self.update_checker = update_checker
+        
+        # 创建更新管理器
+        self.update_manager = UpdateManager(
+            update_checker=update_checker,
+            config_manager=config_manager,
+            process_manager=process_manager,
+            downloader=Downloader()
+        )
         
         # 用于快速中断资源监控线程的事件
         self._stop_monitoring_event = threading.Event()
-        self.update_checker = update_checker
         
         self.page: Optional[ft.Page] = None
         self.current_page_index = 0
@@ -99,7 +109,7 @@ class MainWindow:
             log_collector=self.log_collector,
             on_navigate_logs=lambda: self._navigate_to(1),
             version_detector=self.version_detector,
-            update_checker=self.update_checker
+            update_manager=self.update_manager
         )
         self.home_page.build()
         self.home_page.set_page(page)  # 设置页面引用以显示对话框
@@ -126,12 +136,10 @@ class MainWindow:
         
         self.about_page = AboutPage(
             self.version_detector,
-            self.update_checker,
-            self.config_manager,
-            process_manager=self.process_manager,
-            on_update_complete=self._on_about_page_update_complete,
+            update_manager=self.update_manager,
             on_restart_service=self._on_restart_service_after_update
         )
+        self.about_page.config_manager = self.config_manager
         self.about_page.build(page)
         
         # 创建导航栏
@@ -416,7 +424,7 @@ class MainWindow:
         """更新完成后重启服务的回调"""
         import logging
         logger = logging.getLogger(__name__)
-        logger.info("关于页面更新完成，自动重启服务...")
+        logger.info("更新完成，自动重启服务...")
         # 先切换到首页
         self._navigate_to(0)
         # 然后调用首页的启动服务方法
@@ -535,11 +543,9 @@ class MainWindow:
         Args:
             force_exit: 是否强制快速退出（用于更新重启）
         """
-        # 检查是否有待执行的应用更新（首页或关于页面）
-        if self.home_page.has_pending_app_update():
-            self._execute_pending_update(self.home_page.get_pending_update_script())
-        elif self.about_page.has_pending_app_update():
-            self._execute_pending_update(self.about_page.get_pending_update_script())
+        # 检查是否有待执行的应用更新
+        if self.update_manager.has_pending_app_update():
+            self._execute_pending_update(self.update_manager.pending_app_update_script)
         
         # 窗口关闭时的清理逻辑
         self._cleanup(force_cleanup=force_exit)

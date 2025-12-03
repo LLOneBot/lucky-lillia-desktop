@@ -399,7 +399,7 @@ class HomePage:
                  log_collector=None,
                  on_navigate_logs: Optional[Callable] = None,
                  version_detector: Optional[VersionDetector] = None,
-                 update_checker: Optional[UpdateChecker] = None):
+                 update_manager=None):
         """初始化首页
         
         Args:
@@ -408,14 +408,14 @@ class HomePage:
             log_collector: 日志收集器实例（可选）
             on_navigate_logs: 导航到日志页面的回调
             version_detector: 版本检测器实例（可选）
-            update_checker: 更新检查器实例（可选）
+            update_manager: 更新管理器实例（可选）
         """
         self.process_manager = process_manager
         self.config_manager = config_manager
         self.log_collector = log_collector
         self.on_navigate_logs = on_navigate_logs
         self.version_detector = version_detector or VersionDetector()
-        self.update_checker = update_checker or UpdateChecker()
+        self.update_manager = update_manager
         self.downloader = Downloader()
         self.control = None
         self.page = None
@@ -783,17 +783,11 @@ class HomePage:
     
     def _show_stop_confirm_dialog(self):
         """显示停止确认对话框"""
-        def on_stop_all(e):
+        def on_confirm(e):
             dialog.open = False
             if self.page:
                 self.page.update()
             self._do_stop_services(stop_qq=True)
-        
-        def on_stop_keep_qq(e):
-            dialog.open = False
-            if self.page:
-                self.page.update()
-            self._do_stop_services(stop_qq=False)
         
         def on_cancel(e):
             dialog.open = False
@@ -803,13 +797,12 @@ class HomePage:
         dialog = ft.AlertDialog(
             modal=True,
             title=ft.Text("停止服务"),
-            content=ft.Text("检测到QQ正在运行，是否同时关闭QQ？"),
+            content=ft.Text("确定要停止所有服务吗？"),
             actions=[
                 ft.TextButton("取消", on_click=on_cancel),
-                ft.TextButton("保留QQ", on_click=on_stop_keep_qq),
                 ft.ElevatedButton(
-                    "全部停止",
-                    on_click=on_stop_all,
+                    "停止",
+                    on_click=on_confirm,
                     style=ft.ButtonStyle(
                         bgcolor=ft.Colors.RED_600,
                         color=ft.Colors.WHITE
@@ -2312,111 +2305,62 @@ class HomePage:
     
     def check_for_updates(self):
         """检查管理器、PMHQ和LLOneBot更新（进入控制面板时调用）"""
-        import threading
         import logging
         logger = logging.getLogger(__name__)
+        
+        if not self.update_manager:
+            logger.warning("UpdateManager未设置，跳过更新检查")
+            return
+        
         logger.info("开始检查组件更新...")
         
-        def check_thread():
-            try:
-                updates_found = []
+        # 设置回调
+        def on_check_complete(updates_found):
+            if updates_found:
+                update_names = [name for name, _ in updates_found]
+                logger.info(f"发现更新: {', '.join(update_names)}")
                 
-                # 获取配置中的路径
-                config = self.config_manager.load_config()
-                pmhq_path = config.get("pmhq_path", "")
-                llonebot_path = config.get("llonebot_path", "")
-                
-                # 检查管理器更新
-                app_version = self.version_detector.get_app_version()
-                logger.info(f"管理器当前版本: {app_version}")
-                if app_version and app_version != "未知":
-                    app_package = NPM_PACKAGES.get("app")
-                    app_repo = GITHUB_REPOS.get("app")
-                    if app_package:
-                        app_update = self.update_checker.check_update(app_package, app_version, app_repo)
-                        logger.info(f"管理器更新检查: has_update={app_update.has_update}, latest={app_update.latest_version}, error={app_update.error}")
-                        if app_update.has_update:
-                            updates_found.append(("管理器", app_update))
-                
-                # 检查PMHQ更新
-                pmhq_version = self.version_detector.detect_pmhq_version(pmhq_path)
-                logger.info(f"PMHQ当前版本: {pmhq_version}")
-                if pmhq_version and pmhq_version != "未知":
-                    pmhq_package = NPM_PACKAGES.get("pmhq")
-                    pmhq_repo = GITHUB_REPOS.get("pmhq")
-                    if pmhq_package:
-                        pmhq_update = self.update_checker.check_update(pmhq_package, pmhq_version, pmhq_repo)
-                        logger.info(f"PMHQ更新检查: has_update={pmhq_update.has_update}, latest={pmhq_update.latest_version}")
-                        if pmhq_update.has_update:
-                            updates_found.append(("PMHQ", pmhq_update))
-                
-                # 检查LLOneBot更新
-                llonebot_version = self.version_detector.detect_llonebot_version(llonebot_path)
-                logger.info(f"LLOneBot当前版本: {llonebot_version}")
-                if llonebot_version and llonebot_version != "未知":
-                    llonebot_package = NPM_PACKAGES.get("llonebot")
-                    llonebot_repo = GITHUB_REPOS.get("llonebot")
-                    if llonebot_package:
-                        llonebot_update = self.update_checker.check_update(llonebot_package, llonebot_version, llonebot_repo)
-                        logger.info(f"LLOneBot更新检查: has_update={llonebot_update.has_update}, latest={llonebot_update.latest_version}")
-                        if llonebot_update.has_update:
-                            updates_found.append(("LLOneBot", llonebot_update))
-                
-                # 如果有更新，显示横幅
-                if updates_found:
-                    self._updates_found = updates_found
-                    update_names = [name for name, _ in updates_found]
-                    logger.info(f"发现更新: {', '.join(update_names)}")
-                    
-                    async def show_banner():
-                        # 更新横幅文字
-                        self.update_banner.content.controls[1].value = f"发现新版本: {', '.join(update_names)}"
-                        self.update_banner.visible = True
-                        if self.page:
-                            self.page.update()
-                    
+                async def show_banner():
+                    self.update_banner.content.controls[1].value = f"发现新版本: {', '.join(update_names)}"
+                    self.update_banner.visible = True
                     if self.page:
-                        self.page.run_task(show_banner)
-                else:
-                    logger.info("所有组件已是最新版本")
-                        
-            except Exception as ex:
-                logger.error(f"检查更新失败: {ex}", exc_info=True)
+                        self.page.update()
+                
+                if self.page:
+                    self.page.run_task(show_banner)
+            else:
+                logger.info("所有组件已是最新版本")
         
-        thread = threading.Thread(target=check_thread, daemon=True)
-        thread.start()
+        self.update_manager.set_callbacks(on_check_complete=on_check_complete)
+        
+        # 获取版本信息
+        config = self.config_manager.load_config()
+        pmhq_path = config.get("pmhq_path", "")
+        llonebot_path = config.get("llonebot_path", "")
+        
+        versions = {
+            "app": self.version_detector.get_app_version(),
+            "pmhq": self.version_detector.detect_pmhq_version(pmhq_path),
+            "llonebot": self.version_detector.detect_llonebot_version(llonebot_path)
+        }
+        
+        # 异步检查更新
+        self.update_manager.check_updates_async(versions)
     
     def _on_update_click(self, e):
         """点击更新按钮"""
-        if self._is_downloading_update:
+        if not self.update_manager or self.update_manager.is_downloading:
             return
         
-        if not hasattr(self, '_updates_found') or not self._updates_found:
+        if not self.update_manager.has_updates:
             return
         
-        # 检查是否有任何进程在运行（包括QQ）
-        running_components = []
-        if self.process_manager.get_process_status("pmhq") == ProcessStatus.RUNNING:
-            running_components.append("PMHQ")
-        if self.process_manager.get_process_status("llonebot") == ProcessStatus.RUNNING:
-            running_components.append("LLOneBot")
-        if self.process_manager.get_qq_pid():
-            running_components.append("QQ")
-        
-        if running_components:
-            # 有进程在运行，弹出确认对话框
-            self._show_stop_process_confirm_dialog(running_components)
-        else:
-            # 没有进程在运行，直接开始更新
-            self._start_component_updates()
+        # 弹出确认对话框
+        self._show_update_confirm_dialog()
     
-    def _show_stop_process_confirm_dialog(self, running_components: list):
-        """显示停止进程确认对话框
-        
-        Args:
-            running_components: 正在运行的组件列表
-        """
-        components_str = "、".join(running_components)
+    def _show_update_confirm_dialog(self):
+        """显示更新确认对话框"""
+        running = self.update_manager.has_running_processes()
         
         def on_cancel(e):
             confirm_dialog.open = False
@@ -2427,18 +2371,24 @@ class HomePage:
             confirm_dialog.open = False
             if self.page:
                 self.page.update()
-            # 用户确认后开始更新（会自动停止进程）
             self._start_component_updates()
+        
+        if running:
+            content_text = (
+                "进程正在运行中。\n\n"
+                "更新需要先停止进程，更新完成后会自动重新启动服务。"
+            )
+        else:
+            updates = self.update_manager.updates_found
+            updates_str = "、".join([name for name, _ in updates])
+            content_text = f"确定要更新 {updates_str} 吗？"
         
         confirm_dialog = ft.AlertDialog(
             title=ft.Text("确认更新"),
-            content=ft.Text(
-                "进程正在运行中。\n\n"
-                "更新需要先停止进程，更新完成后会自动重新启动服务。"
-            ),
+            content=ft.Text(content_text),
             actions=[
                 ft.TextButton("取消", on_click=on_cancel),
-                ft.ElevatedButton("停止并更新", on_click=on_confirm),
+                ft.ElevatedButton("确定更新" if not running else "停止并更新", on_click=on_confirm),
             ],
             actions_alignment=ft.MainAxisAlignment.END,
         )
@@ -2449,13 +2399,12 @@ class HomePage:
             self.page.update()
     
     def _start_component_updates(self):
-        """开始下载组件更新（PMHQ和LLOneBot）"""
-        import threading
+        """开始下载组件更新"""
         import logging
-        import time
         logger = logging.getLogger(__name__)
         
-        self._is_downloading_update = True
+        if not self.update_manager:
+            return
         
         # 创建下载进度对话框
         progress_bar = ft.ProgressBar(width=300, value=0)
@@ -2477,142 +2426,51 @@ class HomePage:
             download_dialog.open = True
             self.page.update()
         
-        def download_thread():
-            try:
-                success_list = []
-                error_list = []
-                
-                # 检查更新前是否有进程在运行（用于决定更新后是否自动重启）
-                had_running_processes = (
-                    self.process_manager.get_process_status("pmhq") == ProcessStatus.RUNNING or
-                    self.process_manager.get_process_status("llonebot") == ProcessStatus.RUNNING or
-                    self.process_manager.get_qq_pid() is not None
-                )
-                
-                # 先停止所有进程（包括QQ），避免文件被占用
-                if had_running_processes:
-                    async def update_stopping_all():
-                        component_text.value = "正在停止所有进程..."
-                        if self.page:
-                            self.page.update()
-                    if self.page:
-                        self.page.run_task(update_stopping_all)
-                    
-                    logger.info("更新前停止所有进程...")
-                    self.process_manager.stop_all(stop_qq=True)
-                    
-                    # 等待所有进程完全退出
-                    if not self.process_manager.wait_all_stopped(timeout=10.0):
-                        logger.warning("部分进程可能未完全退出，继续更新...")
-                    else:
-                        logger.info("所有进程已完全退出")
-                
-                for component_name, update_info in self._updates_found:
-                    # 更新当前组件名称
-                    async def update_component_name(name=component_name):
-                        component_text.value = f"正在更新: {name}"
-                        progress_bar.value = 0
-                        progress_text.value = "准备下载..."
-                        if self.page:
-                            self.page.update()
-                    
-                    if self.page:
-                        self.page.run_task(update_component_name)
-                    
-                    # 进度回调
-                    def progress_callback(downloaded: int, total: int):
-                        if total > 0:
-                            progress = downloaded / total
-                            
-                            async def update_progress():
-                                progress_bar.value = progress
-                                progress_text.value = f"下载中... {downloaded / 1024 / 1024:.1f} MB / {total / 1024 / 1024:.1f} MB ({progress * 100:.0f}%)"
-                                if self.page:
-                                    self.page.update()
-                            
-                            if self.page:
-                                self.page.run_task(update_progress)
-                    
-                    try:
-                        # 根据组件类型下载
-                        if component_name == "管理器":
-                            # 使用新的自动更新逻辑
-                            import sys
-                            current_pid = os.getpid()
-                            if getattr(sys, 'frozen', False):
-                                current_exe = sys.executable
-                            else:
-                                current_exe = os.path.abspath("lucky-lillia-desktop.exe")
-                            
-                            new_exe_path = self.downloader.download_app_update(current_exe, progress_callback)
-                            batch_script = self.downloader.apply_app_update(new_exe_path, current_exe, current_pid)
-                            self._pending_app_update_script = batch_script
-                            success_list.append(component_name)
-                        elif component_name == "PMHQ":
-                            config = self.config_manager.load_config()
-                            pmhq_path = config.get("pmhq_path", "bin/pmhq/pmhq-win-x64.exe")
-                            save_path = pmhq_path.replace('.exe', '.zip')
-                            self.downloader.download_pmhq(save_path, progress_callback)
-                            success_list.append(component_name)
-                        elif component_name == "LLOneBot":
-                            config = self.config_manager.load_config()
-                            llonebot_path = config.get("llonebot_path", "bin/llonebot/llonebot.js")
-                            save_path = llonebot_path.replace('.js', '.zip')
-                            if not save_path.endswith('.zip'):
-                                save_path = llonebot_path + '.zip'
-                            self.downloader.download_llonebot(save_path, progress_callback)
-                            success_list.append(component_name)
-                    except Exception as ex:
-                        logger.error(f"下载{component_name}失败: {ex}")
-                        error_list.append((component_name, str(ex)))
-                
-                # 下载完成
-                async def on_complete():
-                    self._is_downloading_update = False
-                    download_dialog.open = False
-                    self.update_banner.visible = False
-                    self._updates_found = []
-                    if self.page:
-                        self.page.update()
-                    
-                    # 如果有管理器更新，显示重启提示
-                    if "管理器" in success_list and self._pending_app_update_script:
-                        self._show_app_update_restart_dialog(success_list, error_list)
-                    elif had_running_processes:
-                        # 只有之前有进程在运行，更新完成后才自动重新启动服务
-                        self._auto_restart_after_update()
-                
+        # 设置回调
+        def on_download_status(status: str):
+            async def update_status():
+                component_text.value = status
                 if self.page:
-                    self.page.run_task(on_complete)
-                    
-            except Exception as ex:
-                logger.error(f"下载更新失败: {ex}")
-                
-                async def on_error():
-                    self._is_downloading_update = False
-                    download_dialog.open = False
-                    if self.page:
-                        self.page.update()
-                    
-                    # 显示错误提示
-                    error_dialog = ft.AlertDialog(
-                        title=ft.Text("更新失败"),
-                        content=ft.Text(f"下载更新时发生错误:\n\n{str(ex)}"),
-                        actions=[
-                            ft.TextButton("确定", on_click=lambda e: self._close_dialog(error_dialog))
-                        ],
-                    )
-                    if self.page:
-                        self.page.overlay.append(error_dialog)
-                        error_dialog.open = True
-                        self.page.update()
-                
-                if self.page:
-                    self.page.run_task(on_error)
+                    self.page.update()
+            if self.page:
+                self.page.run_task(update_status)
         
-        # 启动下载线程
-        thread = threading.Thread(target=download_thread, daemon=True)
-        thread.start()
+        def on_download_progress(name: str, downloaded: int, total: int):
+            if total > 0:
+                progress = downloaded / total
+                async def update_progress():
+                    progress_bar.value = progress
+                    progress_text.value = f"下载中... {downloaded / 1024 / 1024:.1f} MB / {total / 1024 / 1024:.1f} MB ({progress * 100:.0f}%)"
+                    if self.page:
+                        self.page.update()
+                if self.page:
+                    self.page.run_task(update_progress)
+        
+        def on_download_complete(success_list, error_list, had_running_processes):
+            async def on_complete():
+                download_dialog.open = False
+                self.update_banner.visible = False
+                if self.page:
+                    self.page.update()
+                
+                # 如果有管理器更新，显示重启提示
+                if "管理器" in success_list and self.update_manager.has_pending_app_update():
+                    self._show_app_update_restart_dialog(success_list, error_list)
+                elif had_running_processes:
+                    # 只有之前有进程在运行，更新完成后才自动重新启动服务
+                    self._auto_restart_after_update()
+            
+            if self.page:
+                self.page.run_task(on_complete)
+        
+        self.update_manager.set_callbacks(
+            on_download_status=on_download_status,
+            on_download_progress=on_download_progress,
+            on_download_complete=on_download_complete
+        )
+        
+        # 异步下载所有更新
+        self.update_manager.download_all_updates_async()
     
     def _close_dialog(self, dialog: ft.AlertDialog):
         """关闭对话框"""
@@ -2644,14 +2502,16 @@ class HomePage:
             import os  # 在函数开始时导入os模块
             self._close_dialog(restart_dialog)
             # 启动更新脚本并退出当前程序
-            if self._pending_app_update_script:
-                batch_dir = os.path.dirname(self._pending_app_update_script)
+            script = self.update_manager.pending_app_update_script if self.update_manager else None
+            if script:
+                batch_dir = os.path.dirname(script)
                 subprocess.Popen(
-                    f'cmd /c start "更新" /D "{batch_dir}" "{self._pending_app_update_script}"',
+                    f'cmd /c start "更新" /D "{batch_dir}" "{script}"',
                     shell=True
                 )
                 # 清空待执行的更新脚本，避免主窗口退出时重复执行
-                self._pending_app_update_script = None
+                if self.update_manager:
+                    self.update_manager.clear_pending_app_update()
             # 直接退出程序，不触发关闭确认对话框
             if self.page:
                 # 通过主窗口实例直接调用关闭方法
@@ -2714,7 +2574,7 @@ class HomePage:
         Returns:
             更新脚本路径，如果没有待更新则返回None
         """
-        return self._pending_app_update_script
+        return self.update_manager.pending_app_update_script if self.update_manager else None
     
     def has_pending_app_update(self) -> bool:
         """检查是否有待执行的应用更新
@@ -2722,4 +2582,4 @@ class HomePage:
         Returns:
             如果有待更新返回True
         """
-        return self._pending_app_update_script is not None
+        return self.update_manager.has_pending_app_update() if self.update_manager else False
