@@ -2394,12 +2394,65 @@ class HomePage:
         if not hasattr(self, '_updates_found') or not self._updates_found:
             return
         
-        self._start_component_updates()
+        # 检查是否有任何进程在运行（包括QQ）
+        running_components = []
+        if self.process_manager.get_process_status("pmhq") == ProcessStatus.RUNNING:
+            running_components.append("PMHQ")
+        if self.process_manager.get_process_status("llonebot") == ProcessStatus.RUNNING:
+            running_components.append("LLOneBot")
+        if self.process_manager.get_qq_pid():
+            running_components.append("QQ")
+        
+        if running_components:
+            # 有进程在运行，弹出确认对话框
+            self._show_stop_process_confirm_dialog(running_components)
+        else:
+            # 没有进程在运行，直接开始更新
+            self._start_component_updates()
+    
+    def _show_stop_process_confirm_dialog(self, running_components: list):
+        """显示停止进程确认对话框
+        
+        Args:
+            running_components: 正在运行的组件列表
+        """
+        components_str = "、".join(running_components)
+        
+        def on_cancel(e):
+            confirm_dialog.open = False
+            if self.page:
+                self.page.update()
+        
+        def on_confirm(e):
+            confirm_dialog.open = False
+            if self.page:
+                self.page.update()
+            # 用户确认后开始更新（会自动停止进程）
+            self._start_component_updates()
+        
+        confirm_dialog = ft.AlertDialog(
+            title=ft.Text("确认更新"),
+            content=ft.Text(
+                "进程正在运行中。\n\n"
+                "更新需要先停止进程，更新完成后会自动重新启动服务。"
+            ),
+            actions=[
+                ft.TextButton("取消", on_click=on_cancel),
+                ft.ElevatedButton("停止并更新", on_click=on_confirm),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        
+        if self.page:
+            self.page.overlay.append(confirm_dialog)
+            confirm_dialog.open = True
+            self.page.update()
     
     def _start_component_updates(self):
         """开始下载组件更新（PMHQ和LLOneBot）"""
         import threading
         import logging
+        import time
         logger = logging.getLogger(__name__)
         
         self._is_downloading_update = True
@@ -2428,6 +2481,31 @@ class HomePage:
             try:
                 success_list = []
                 error_list = []
+                
+                # 检查更新前是否有进程在运行（用于决定更新后是否自动重启）
+                had_running_processes = (
+                    self.process_manager.get_process_status("pmhq") == ProcessStatus.RUNNING or
+                    self.process_manager.get_process_status("llonebot") == ProcessStatus.RUNNING or
+                    self.process_manager.get_qq_pid() is not None
+                )
+                
+                # 先停止所有进程（包括QQ），避免文件被占用
+                if had_running_processes:
+                    async def update_stopping_all():
+                        component_text.value = "正在停止所有进程..."
+                        if self.page:
+                            self.page.update()
+                    if self.page:
+                        self.page.run_task(update_stopping_all)
+                    
+                    logger.info("更新前停止所有进程...")
+                    self.process_manager.stop_all(stop_qq=True)
+                    
+                    # 等待所有进程完全退出
+                    if not self.process_manager.wait_all_stopped(timeout=10.0):
+                        logger.warning("部分进程可能未完全退出，继续更新...")
+                    else:
+                        logger.info("所有进程已完全退出")
                 
                 for component_name, update_info in self._updates_found:
                     # 更新当前组件名称
@@ -2500,29 +2578,9 @@ class HomePage:
                     # 如果有管理器更新，显示重启提示
                     if "管理器" in success_list and self._pending_app_update_script:
                         self._show_app_update_restart_dialog(success_list, error_list)
-                    else:
-                        # 显示普通结果
-                        if success_list and not error_list:
-                            msg = f"以下组件已更新成功:\n{', '.join(success_list)}\n\n请重新启动服务以使用新版本。"
-                            title = "更新完成"
-                        elif error_list and not success_list:
-                            msg = "更新失败:\n" + "\n".join([f"{name}: {err}" for name, err in error_list])
-                            title = "更新失败"
-                        else:
-                            msg = f"成功: {', '.join(success_list)}\n失败: " + ", ".join([name for name, _ in error_list])
-                            title = "部分更新完成"
-                        
-                        result_dialog = ft.AlertDialog(
-                            title=ft.Text(title),
-                            content=ft.Text(msg),
-                            actions=[
-                                ft.TextButton("确定", on_click=lambda e: self._close_dialog(result_dialog))
-                            ],
-                        )
-                        if self.page:
-                            self.page.overlay.append(result_dialog)
-                            result_dialog.open = True
-                            self.page.update()
+                    elif had_running_processes:
+                        # 只有之前有进程在运行，更新完成后才自动重新启动服务
+                        self._auto_restart_after_update()
                 
                 if self.page:
                     self.page.run_task(on_complete)
@@ -2561,6 +2619,15 @@ class HomePage:
         dialog.open = False
         if self.page:
             self.page.update()
+
+    def _auto_restart_after_update(self):
+        """更新完成后自动重新启动服务"""
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info("更新完成，自动重新启动服务...")
+        
+        # 直接调用启动服务的方法
+        self._on_global_start_click(None)
 
     def _show_app_update_restart_dialog(self, success_list: list, error_list: list):
         """显示应用更新重启对话框

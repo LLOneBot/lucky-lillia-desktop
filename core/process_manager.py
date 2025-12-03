@@ -614,6 +614,65 @@ class ProcessManager:
         
         logger.info("所有进程已停止")
     
+    def wait_all_stopped(self, timeout: float = 10.0) -> bool:
+        """等待所有进程完全退出
+        
+        Args:
+            timeout: 最大等待时间（秒），默认10秒
+            
+        Returns:
+            所有进程都已退出返回True，超时返回False
+        """
+        import psutil
+        
+        start_time = time.time()
+        check_interval = 0.2  # 每200ms检查一次
+        
+        while time.time() - start_time < timeout:
+            all_stopped = True
+            
+            # 检查PMHQ状态
+            if self._status.get("pmhq") == ProcessStatus.RUNNING:
+                all_stopped = False
+            
+            # 检查LLOneBot状态
+            if self._status.get("llonebot") == ProcessStatus.RUNNING:
+                all_stopped = False
+            
+            # 检查普通进程
+            for name, proc in list(self._processes.items()):
+                if proc.poll() is None:  # 进程仍在运行
+                    all_stopped = False
+                    break
+            
+            # 检查管理员进程
+            for name, pid in list(self._admin_pids.items()):
+                try:
+                    if psutil.pid_exists(pid):
+                        proc = psutil.Process(pid)
+                        if proc.is_running():
+                            all_stopped = False
+                            break
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+            
+            # 检查QQ进程
+            if self._qq_pid:
+                try:
+                    if psutil.pid_exists(self._qq_pid):
+                        all_stopped = False
+                except:
+                    pass
+            
+            if all_stopped:
+                logger.info(f"所有进程已完全退出，耗时 {time.time() - start_time:.2f} 秒")
+                return True
+            
+            time.sleep(check_interval)
+        
+        logger.warning(f"等待进程退出超时（{timeout}秒）")
+        return False
+    
     def get_process(self, process_name: str) -> Optional[subprocess.Popen]:
         """获取进程对象（用于日志收集器附加）
         

@@ -128,7 +128,9 @@ class MainWindow:
             self.version_detector,
             self.update_checker,
             self.config_manager,
-            on_update_complete=self._on_about_page_update_complete
+            process_manager=self.process_manager,
+            on_update_complete=self._on_about_page_update_complete,
+            on_restart_service=self._on_restart_service_after_update
         )
         self.about_page.build(page)
         
@@ -409,6 +411,16 @@ class MainWindow:
         """
         # 清除控制面板的更新横幅
         self.home_page.clear_update_banner(component)
+    
+    def _on_restart_service_after_update(self):
+        """更新完成后重启服务的回调"""
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info("关于页面更新完成，自动重启服务...")
+        # 先切换到首页
+        self._navigate_to(0)
+        # 然后调用首页的启动服务方法
+        self.home_page._on_global_start_click(None)
     
     def _update_window_title(self, uin: str, nickname: str):
         """更新窗口标题

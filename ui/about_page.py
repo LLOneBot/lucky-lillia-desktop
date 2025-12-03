@@ -1,10 +1,13 @@
 """关于/版本页面UI模块 - 显示版本信息和更新检查"""
 
 import flet as ft
+import time
+import logging
 from typing import Optional, Callable, Dict
 from core.version_detector import VersionDetector
 from core.update_checker import UpdateChecker, UpdateInfo
 from core.config_manager import ConfigManager
+from core.process_manager import ProcessManager, ProcessStatus
 from utils.constants import APP_NAME, NPM_PACKAGES, GITHUB_REPOS
 from utils.downloader import Downloader, DownloadError
 import threading
@@ -202,7 +205,9 @@ class AboutPage:
                  update_checker: UpdateChecker,
                  config_manager: Optional[ConfigManager] = None,
                  downloader: Optional[Downloader] = None,
-                 on_update_complete: Optional[Callable[[str], None]] = None):
+                 process_manager: Optional[ProcessManager] = None,
+                 on_update_complete: Optional[Callable[[str], None]] = None,
+                 on_restart_service: Optional[Callable[[], None]] = None):
         """初始化关于页面
         
         Args:
@@ -210,13 +215,17 @@ class AboutPage:
             update_checker: 更新检查器实例
             config_manager: 配置管理器实例（可选，用于获取路径）
             downloader: 下载器实例（可选，用于下载更新）
+            process_manager: 进程管理器实例（可选，用于更新前停止进程）
             on_update_complete: 更新完成回调（参数为组件名称）
+            on_restart_service: 重启服务回调（更新完成后自动调用）
         """
         self.version_detector = version_detector
         self.update_checker = update_checker
         self.on_update_complete = on_update_complete
+        self.on_restart_service = on_restart_service
         self.config_manager = config_manager
         self.downloader = downloader or Downloader()
+        self.process_manager = process_manager
         self.control = None
         self.page = None
         self._is_downloading = False
@@ -584,6 +593,16 @@ class AboutPage:
             card = self.app_card
             display_name = APP_NAME
         
+        # 检查是否有任何进程在运行（包括QQ，仅对PMHQ和LLOneBot更新时检查）
+        running_components = []
+        if self.process_manager and component in ("pmhq", "llonebot"):
+            if self.process_manager.get_process_status("pmhq") == ProcessStatus.RUNNING:
+                running_components.append("PMHQ")
+            if self.process_manager.get_process_status("llonebot") == ProcessStatus.RUNNING:
+                running_components.append("LLOneBot")
+            if self.process_manager.get_qq_pid():
+                running_components.append("QQ")
+        
         # 显示确认对话框
         def on_confirm(e):
             self._close_dialog(confirm_dialog)
@@ -592,15 +611,26 @@ class AboutPage:
         def on_cancel(e):
             self._close_dialog(confirm_dialog)
         
-        confirm_dialog = ft.AlertDialog(
-            title=ft.Text(f"更新 {display_name}"),
-            content=ft.Text(
+        # 根据进程状态显示不同的提示信息
+        if running_components:
+            content_text = (
+                "进程正在运行中。\n\n"
+                "更新需要先停止进程，更新完成后会自动重新启动服务。"
+            )
+            confirm_btn_text = "停止并更新"
+        else:
+            content_text = (
                 f"确定要将 {display_name} 从 {card.current_version} 更新到 {card.latest_version} 吗？\n\n"
                 "更新过程中请勿关闭程序。"
-            ),
+            )
+            confirm_btn_text = "确定更新"
+        
+        confirm_dialog = ft.AlertDialog(
+            title=ft.Text(f"更新 {display_name}"),
+            content=ft.Text(content_text),
             actions=[
                 ft.TextButton("取消", on_click=on_cancel),
-                ft.ElevatedButton("确定更新", on_click=on_confirm),
+                ft.ElevatedButton(confirm_btn_text, on_click=on_confirm),
             ],
             actions_alignment=ft.MainAxisAlignment.END,
         )
@@ -705,6 +735,43 @@ class AboutPage:
             download_dialog: 下载对话框
             display_name: 显示名称
         """
+        logger = logging.getLogger(__name__)
+        
+        # 检查更新前是否有进程在运行（用于决定更新后是否自动重启）
+        had_running_processes = False
+        if self.process_manager:
+            from core.process_manager import ProcessStatus
+            had_running_processes = (
+                self.process_manager.get_process_status("pmhq") == ProcessStatus.RUNNING or
+                self.process_manager.get_process_status("llonebot") == ProcessStatus.RUNNING or
+                self.process_manager.get_qq_pid() is not None
+            )
+        
+        # 先停止所有进程（包括QQ），避免文件被占用无法覆盖
+        if self.process_manager and had_running_processes:
+            async def update_stopping_all():
+                download_dialog.title = ft.Text("正在停止所有进程...")
+                if self.page:
+                    self.page.update()
+            if self.page:
+                self.page.run_task(update_stopping_all)
+            
+            logger.info("更新前停止所有进程...")
+            self.process_manager.stop_all(stop_qq=True)
+            
+            # 等待所有进程完全退出
+            if not self.process_manager.wait_all_stopped(timeout=10.0):
+                logger.warning("部分进程可能未完全退出，继续更新...")
+            else:
+                logger.info("所有进程已完全退出")
+            
+            async def update_downloading():
+                download_dialog.title = ft.Text(f"正在更新 {display_name}")
+                if self.page:
+                    self.page.update()
+            if self.page:
+                self.page.run_task(update_downloading)
+        
         # 获取保存路径
         save_dir = os.path.join("bin", component)
         os.makedirs(save_dir, exist_ok=True)
@@ -719,6 +786,9 @@ class AboutPage:
             self.downloader.download_pmhq(save_path, progress_callback)
         else:
             self.downloader.download_llonebot(save_path, progress_callback)
+        
+        # 保存变量用于闭包
+        should_restart = had_running_processes
         
         # 下载成功
         async def on_success():
@@ -739,6 +809,12 @@ class AboutPage:
             
             # 刷新版本信息
             self._load_versions()
+            
+            # 只有之前有进程在运行，更新完成后才自动重启服务
+            logger.info(f"更新完成，should_restart={should_restart}, on_restart_service={self.on_restart_service is not None}")
+            if should_restart and self.on_restart_service:
+                logger.info("调用重启服务回调...")
+                self.on_restart_service()
         
         if self.page:
             self.page.run_task(on_success)
