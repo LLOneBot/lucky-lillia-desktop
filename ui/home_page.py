@@ -148,14 +148,17 @@ class ProcessResourceCard:
             self.status_text.value = "未启动"
             self.status_text.color = ft.Colors.GREY_600
         
-        # 更新CPU
-        self.cpu_text.value = f"CPU: {cpu_percent:.1f}%"
-        self.cpu_progress.value = min(cpu_percent / 100.0, 1.0)
+        # 更新CPU（除以核心数得到相对于整个系统的百分比）
+        cpu_count = psutil.cpu_count() or 1
+        normalized_cpu = cpu_percent / cpu_count
+        self.cpu_text.value = f"CPU: {normalized_cpu:.1f}%"
+        self.cpu_progress.value = min(normalized_cpu / 100.0, 1.0)
         
         # 更新内存
         self.memory_text.value = f"内存: {memory_mb:.0f} MB"
-        # 假设最大内存为1GB用于进度条显示
-        self.memory_progress.value = min(memory_mb / 1024.0, 1.0)
+        # 使用系统总内存计算百分比
+        total_memory_mb = psutil.virtual_memory().total / 1024 / 1024
+        self.memory_progress.value = min(memory_mb / total_memory_mb, 1.0)
 
 
 class ResourceMonitorCard:

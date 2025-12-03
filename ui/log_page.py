@@ -135,9 +135,9 @@ class LogPage:
         if not logs:
             text = "暂无日志"
         else:
-            # 倒序显示（新的在上，旧的在下）
+            # 正序显示（旧的在上，新的在下）
             recent_logs = list(logs)[-self.MAX_DISPLAY:]
-            lines = [self._format_log_entry(entry) for entry in reversed(recent_logs)]
+            lines = [self._format_log_entry(entry) for entry in recent_logs]
             text = "\n".join(lines)
 
         if self.log_text:
@@ -146,9 +146,9 @@ class LogPage:
             try:
                 if self.control and self.control.page:
                     self.control.page.update()
-                    # 开启自动刷新时，滚动到顶部
+                    # 开启自动刷新时，滚动到底部
                     if self._auto_refresh_enabled and self.log_column:
-                        self.log_column.scroll_to(offset=0, duration=0)
+                        self.log_column.scroll_to(offset=-1, duration=0)
             except Exception as e:
                 print(f"日志更新失败: {e}")
 
