@@ -198,12 +198,10 @@ class MainWindow:
             )
         )
         
-        # 创建内容区域
+        # 创建内容区域（移除动画避免卡顿）
         self.content_area = ft.Container(
             content=self.home_page.control,
             expand=True,
-            animate=ft.Animation(300, ft.AnimationCurve.EASE_IN_OUT),
-            animate_opacity=300,
         )
         
         # 创建头像/图标容器
@@ -300,18 +298,14 @@ class MainWindow:
         Args:
             index: 页面索引 (0=首页, 1=日志, 2=配置, 3=LLOneBot配置, 4=关于)
         """
+        # 离开当前页面时的处理
+        if self.current_page_index == 1 and index != 1:
+            self.log_page.on_page_leave()
+        
         self.current_page_index = index
         self.nav_rail.selected_index = index
         
-        # 淡出效果
-        self.content_area.opacity = 0
-        try:
-            if self.page:
-                self.page.update()
-        except AssertionError:
-            pass  # 忽略控件未添加到页面的错误
-        
-        # 切换内容区域
+        # 直接切换内容区域（无动画）
         if index == 0:
             self.content_area.content = self.home_page.control
         elif index == 1:
@@ -327,19 +321,15 @@ class MainWindow:
             self.content_area.content = self.about_page.control
             self.about_page.refresh()
         
-        # 淡入效果
-        self.content_area.opacity = 1
         try:
             if self.page:
                 self.page.update()
         except AssertionError:
-            pass  # 忽略控件未添加到页面的错误
+            pass
         
-        # 首页资源刷新放在页面显示之后，避免阻塞
+        # 首页资源刷新放在页面显示之后
         if index == 0:
             self.home_page.refresh_process_resources()
-            if self.page:
-                self.page.update()
     
     def _on_theme_toggle(self, e):
         """主题切换按钮点击处理"""
