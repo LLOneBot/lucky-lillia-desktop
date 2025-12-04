@@ -386,7 +386,8 @@ class LoginDialog:
     def _uin_check_loop(self):
         """循环检查uin是否已获取（表示登录成功）"""
         import time
-        import requests
+        import json
+        import urllib.request
         
         url = f"http://127.0.0.1:{self.pmhq_port}"
         payload = {
@@ -399,16 +400,22 @@ class LoginDialog:
         
         while self._uin_check_running:
             try:
-                response = requests.post(url, json=payload, timeout=5)
-                if response.status_code == 200:
-                    data = response.json()
-                    if data.get("type") == "call" and "data" in data:
-                        result = data["data"].get("result", {})
-                        uin = result.get("uin")
-                        if uin:
-                            # 登录成功
-                            self._handle_login_success(uin)
-                            return
+                req = urllib.request.Request(
+                    url,
+                    data=json.dumps(payload).encode('utf-8'),
+                    headers={'Content-Type': 'application/json'},
+                    method='POST'
+                )
+                with urllib.request.urlopen(req, timeout=5) as response:
+                    if response.status == 200:
+                        data = json.loads(response.read().decode('utf-8'))
+                        if data.get("type") == "call" and "data" in data:
+                            result = data["data"].get("result", {})
+                            uin = result.get("uin")
+                            if uin:
+                                # 登录成功
+                                self._handle_login_success(uin)
+                                return
             except Exception:
                 pass
             

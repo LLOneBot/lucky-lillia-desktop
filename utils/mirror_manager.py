@@ -1,6 +1,8 @@
 """GitHub镜像管理工具 - 管理和选择可用的GitHub镜像"""
 
-import requests
+import urllib.request
+import urllib.error
+import socket
 from typing import List, Optional
 from utils.constants import GITHUB_MIRRORS
 
@@ -57,19 +59,17 @@ class MirrorManager:
                 test_url = mirror + "/"
             
             # 发送HEAD请求测试连接
-            response = requests.head(
+            req = urllib.request.Request(
                 test_url,
-                timeout=self.timeout,
-                allow_redirects=True,
+                method='HEAD',
                 headers={"User-Agent": "Lucky-Lillia"}
             )
             
-            # 2xx或3xx状态码都认为是可用的
-            return response.status_code < 400
+            with urllib.request.urlopen(req, timeout=self.timeout) as response:
+                # 2xx或3xx状态码都认为是可用的
+                return response.status < 400
             
-        except (requests.exceptions.Timeout, 
-                requests.exceptions.ConnectionError,
-                requests.exceptions.RequestException):
+        except (socket.timeout, urllib.error.URLError, urllib.error.HTTPError):
             return False
     
     def reset_cache(self):

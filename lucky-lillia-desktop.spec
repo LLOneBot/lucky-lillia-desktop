@@ -15,7 +15,7 @@ a = Analysis(
         'flet',
         'flet.core',
         'flet.utils',
-        'requests',
+
         'psutil',
         'packaging',
         'packaging.version',

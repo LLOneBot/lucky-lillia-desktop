@@ -4,7 +4,9 @@ import os
 import shutil
 import zipfile
 import tarfile
-import requests
+import urllib.request
+import urllib.error
+import socket
 from typing import Optional, Callable
 from utils.constants import UPDATE_CHECK_TIMEOUT, NPM_PACKAGES, NPM_REGISTRY_MIRRORS
 from utils.npm_api import get_package_info, get_package_tarball_url, NpmAPIError, NetworkError, TimeoutError
@@ -178,30 +180,29 @@ class Downloader:
             try:
                 logger.info(f"尝试下载: {url}")
                 
-                response = requests.get(
+                req = urllib.request.Request(
                     url,
-                    timeout=self.timeout,
-                    stream=True,
                     headers={"User-Agent": "QQ-Bot-Manager"}
                 )
                 
-                response.raise_for_status()
-                
-                total_size = int(response.headers.get('content-length', 0))
-                
-                # 确保目录存在
-                os.makedirs(extract_dir, exist_ok=True)
-                
-                # 临时文件路径
-                temp_file = os.path.join(extract_dir, "temp_download.tgz")
-                
-                # 下载文件
-                downloaded_size = 0
-                chunk_size = 8192
-                
-                with open(temp_file, 'wb') as f:
-                    for chunk in response.iter_content(chunk_size=chunk_size):
-                        if chunk:
+                with urllib.request.urlopen(req, timeout=self.timeout) as response:
+                    total_size = int(response.headers.get('content-length', 0))
+                    
+                    # 确保目录存在
+                    os.makedirs(extract_dir, exist_ok=True)
+                    
+                    # 临时文件路径
+                    temp_file = os.path.join(extract_dir, "temp_download.tgz")
+                    
+                    # 下载文件
+                    downloaded_size = 0
+                    chunk_size = 8192
+                    
+                    with open(temp_file, 'wb') as f:
+                        while True:
+                            chunk = response.read(chunk_size)
+                            if not chunk:
+                                break
                             f.write(chunk)
                             downloaded_size += len(chunk)
                             if progress_callback:
@@ -241,16 +242,16 @@ class Downloader:
                 except tarfile.TarError as e:
                     raise NetworkError(f"解压失败，文件可能已损坏: {e}")
                     
-            except requests.exceptions.Timeout:
+            except socket.timeout:
                 last_error = TimeoutError(f"下载超时（{self.timeout}秒）: {url}")
                 logger.warning(f"下载超时: {url}")
                 continue
-            except requests.exceptions.ConnectionError as e:
-                last_error = NetworkError(f"网络连接失败: {e}")
+            except urllib.error.URLError as e:
+                last_error = NetworkError(f"网络连接失败: {e.reason}")
                 logger.warning(f"连接失败: {url}")
                 continue
-            except requests.exceptions.RequestException as e:
-                last_error = NetworkError(f"下载请求失败: {e}")
+            except urllib.error.HTTPError as e:
+                last_error = NetworkError(f"HTTP错误 {e.code}: {e.reason}")
                 logger.warning(f"请求失败: {url}")
                 continue
             except OSError as e:

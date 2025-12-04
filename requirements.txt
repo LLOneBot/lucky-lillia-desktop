@@ -1,9 +1,6 @@
 # UI框架
 flet>=0.21.0
 
-# HTTP客户端
-requests>=2.31.0
-
 # 系统资源监控
 psutil>=5.9.0
 

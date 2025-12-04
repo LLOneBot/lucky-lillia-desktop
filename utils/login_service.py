@@ -4,9 +4,11 @@ import json
 import logging
 import threading
 import time
+import urllib.request
+import urllib.error
+import socket
 from dataclasses import dataclass
 from typing import Optional, Callable, List
-import requests
 
 logger = logging.getLogger(__name__)
 
@@ -79,24 +81,26 @@ class LoginService:
                 }
             }
             
-            response = requests.post(
+            req = urllib.request.Request(
                 self._base_url,
-                json=payload,
-                timeout=5
+                data=json.dumps(payload).encode('utf-8'),
+                headers={'Content-Type': 'application/json'},
+                method='POST'
             )
             
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("type") == "call" and "data" in data:
-                    inner_data = data["data"]
-                    if isinstance(inner_data, dict):
-                        result = inner_data.get("result", {})
-                        # 如果result是错误字符串，说明PMHQ还没准备好
-                        if isinstance(result, str) and ("TypeError" in result or "Error" in result):
-                            return False
-                        # 如果result是dict，说明PMHQ已就绪
-                        if isinstance(result, dict):
-                            return True
+            with urllib.request.urlopen(req, timeout=5) as response:
+                if response.status == 200:
+                    data = json.loads(response.read().decode('utf-8'))
+                    if data.get("type") == "call" and "data" in data:
+                        inner_data = data["data"]
+                        if isinstance(inner_data, dict):
+                            result = inner_data.get("result", {})
+                            # 如果result是错误字符串，说明PMHQ还没准备好
+                            if isinstance(result, str) and ("TypeError" in result or "Error" in result):
+                                return False
+                            # 如果result是dict，说明PMHQ已就绪
+                            if isinstance(result, dict):
+                                return True
             return False
         except Exception:
             return False
@@ -159,57 +163,59 @@ class LoginService:
                 }
             }
             
-            response = requests.post(
+            req = urllib.request.Request(
                 self._base_url,
-                json=payload,
-                timeout=10
+                data=json.dumps(payload).encode('utf-8'),
+                headers={'Content-Type': 'application/json'},
+                method='POST'
             )
             
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("type") == "call" and "data" in data:
-                    inner_data = data["data"]
-                    # 如果inner_data是字符串，尝试解析为JSON
-                    if isinstance(inner_data, str):
-                        try:
-                            inner_data = json.loads(inner_data)
-                        except json.JSONDecodeError:
-                            logger.warning(f"无法解析data字段: {inner_data}")
+            with urllib.request.urlopen(req, timeout=10) as response:
+                if response.status == 200:
+                    data = json.loads(response.read().decode('utf-8'))
+                    if data.get("type") == "call" and "data" in data:
+                        inner_data = data["data"]
+                        # 如果inner_data是字符串，尝试解析为JSON
+                        if isinstance(inner_data, str):
+                            try:
+                                inner_data = json.loads(inner_data)
+                            except json.JSONDecodeError:
+                                logger.warning(f"无法解析data字段: {inner_data}")
+                                return []
+                        if not isinstance(inner_data, dict):
+                            logger.warning(f"data字段类型异常: {type(inner_data)}")
                             return []
-                    if not isinstance(inner_data, dict):
-                        logger.warning(f"data字段类型异常: {type(inner_data)}")
-                        return []
-                    result = inner_data.get("result", {})
-                    # 检查是否为错误信息字符串
-                    if isinstance(result, str):
-                        if "TypeError" in result or "Error" in result:
-                            logger.warning(f"PMHQ返回错误: {result}")
-                        return []
-                    if not isinstance(result, dict):
-                        logger.warning(f"result字段类型异常: {type(result)}, inner_data={inner_data}")
-                        return []
-                    if result.get("result") == 0:
-                        login_list = result.get("LocalLoginInfoList", [])
-                        accounts = []
-                        for item in login_list:
-                            account = LoginAccount(
-                                uin=item.get("uin", ""),
-                                uid=item.get("uid", ""),
-                                nick_name=item.get("nickName", ""),
-                                face_url=item.get("faceUrl", ""),
-                                face_path=item.get("facePath", ""),
-                                login_type=item.get("loginType", 0),
-                                is_quick_login=item.get("isQuickLogin", False),
-                                is_auto_login=item.get("isAutoLogin", False),
-                                is_user_login=item.get("isUserLogin", False)
-                            )
-                            accounts.append(account)
-                        return accounts
+                        result = inner_data.get("result", {})
+                        # 检查是否为错误信息字符串
+                        if isinstance(result, str):
+                            if "TypeError" in result or "Error" in result:
+                                logger.warning(f"PMHQ返回错误: {result}")
+                            return []
+                        if not isinstance(result, dict):
+                            logger.warning(f"result字段类型异常: {type(result)}, inner_data={inner_data}")
+                            return []
+                        if result.get("result") == 0:
+                            login_list = result.get("LocalLoginInfoList", [])
+                            accounts = []
+                            for item in login_list:
+                                account = LoginAccount(
+                                    uin=item.get("uin", ""),
+                                    uid=item.get("uid", ""),
+                                    nick_name=item.get("nickName", ""),
+                                    face_url=item.get("faceUrl", ""),
+                                    face_path=item.get("facePath", ""),
+                                    login_type=item.get("loginType", 0),
+                                    is_quick_login=item.get("isQuickLogin", False),
+                                    is_auto_login=item.get("isAutoLogin", False),
+                                    is_user_login=item.get("isUserLogin", False)
+                                )
+                                accounts.append(account)
+                            return accounts
             
-            logger.warning(f"获取登录列表失败: {response.text}")
+            logger.warning("获取登录列表失败")
             return []
             
-        except requests.exceptions.RequestException as e:
+        except (urllib.error.URLError, socket.timeout) as e:
             logger.error(f"获取登录列表请求失败: {e}")
             return []
         except Exception as e:
@@ -251,46 +257,48 @@ class LoginService:
                 }
             }
             
-            response = requests.post(
+            req = urllib.request.Request(
                 self._base_url,
-                json=payload,
-                timeout=30
+                data=json.dumps(payload).encode('utf-8'),
+                headers={'Content-Type': 'application/json'},
+                method='POST'
             )
             
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("type") == "call" and "data" in data:
-                    inner_data = data["data"]
-                    # 如果inner_data是字符串，尝试解析为JSON
-                    if isinstance(inner_data, str):
-                        try:
-                            inner_data = json.loads(inner_data)
-                        except json.JSONDecodeError:
-                            return LoginResult(success=False, error_msg="响应解析失败")
-                    if not isinstance(inner_data, dict):
-                        return LoginResult(success=False, error_msg="响应格式异常")
-                    result = inner_data.get("result", {})
-                    if not isinstance(result, dict):
-                        # result可能直接是结果码
-                        if result == 0 or result == "0":
+            with urllib.request.urlopen(req, timeout=30) as response:
+                if response.status == 200:
+                    data = json.loads(response.read().decode('utf-8'))
+                    if data.get("type") == "call" and "data" in data:
+                        inner_data = data["data"]
+                        # 如果inner_data是字符串，尝试解析为JSON
+                        if isinstance(inner_data, str):
+                            try:
+                                inner_data = json.loads(inner_data)
+                            except json.JSONDecodeError:
+                                return LoginResult(success=False, error_msg="响应解析失败")
+                        if not isinstance(inner_data, dict):
+                            return LoginResult(success=False, error_msg="响应格式异常")
+                        result = inner_data.get("result", {})
+                        if not isinstance(result, dict):
+                            # result可能直接是结果码
+                            if result == 0 or result == "0":
+                                return LoginResult(success=True)
+                            return LoginResult(success=False, error_msg="登录失败")
+                        result_code = result.get("result")
+                        
+                        # result为0或"0"表示成功
+                        if result_code == 0 or result_code == "0":
                             return LoginResult(success=True)
-                        return LoginResult(success=False, error_msg="登录失败")
-                    result_code = result.get("result")
-                    
-                    # result为0或"0"表示成功
-                    if result_code == 0 or result_code == "0":
-                        return LoginResult(success=True)
-                    else:
-                        error_info = result.get("loginErrorInfo", {})
-                        if isinstance(error_info, dict):
-                            error_msg = error_info.get("errMsg", "登录失败")
                         else:
-                            error_msg = "登录失败"
-                        return LoginResult(success=False, error_msg=error_msg)
+                            error_info = result.get("loginErrorInfo", {})
+                            if isinstance(error_info, dict):
+                                error_msg = error_info.get("errMsg", "登录失败")
+                            else:
+                                error_msg = "登录失败"
+                            return LoginResult(success=False, error_msg=error_msg)
             
             return LoginResult(success=False, error_msg="登录请求失败")
             
-        except requests.exceptions.RequestException as e:
+        except (urllib.error.URLError, socket.timeout) as e:
             logger.error(f"快速登录请求失败: {e}")
             return LoginResult(success=False, error_msg=f"网络错误: {e}")
         except Exception as e:
@@ -326,14 +334,17 @@ class LoginService:
             }
             
             logger.info(f"发送二维码请求到 {self._base_url}")
-            response = requests.post(
+            req = urllib.request.Request(
                 self._base_url,
-                json=payload,
-                timeout=10
+                data=json.dumps(payload).encode('utf-8'),
+                headers={'Content-Type': 'application/json'},
+                method='POST'
             )
             
-            logger.info(f"二维码请求响应: status={response.status_code}, body={response.text[:500] if response.text else 'empty'}")
-            return response.status_code == 200
+            with urllib.request.urlopen(req, timeout=10) as response:
+                response_text = response.read().decode('utf-8')
+                logger.info(f"二维码请求响应: status={response.status}, body={response_text[:500] if response_text else 'empty'}")
+                return response.status == 200
             
         except Exception as e:
             logger.error(f"请求二维码失败: {e}", exc_info=True)
@@ -374,21 +385,19 @@ class LoginService:
         while self._sse_running:
             try:
                 logger.info("正在建立SSE连接...")
-                response = requests.get(
-                    self._base_url,
-                    stream=True,
-                    timeout=120
-                )
-                logger.info(f"SSE连接已建立, status={response.status_code}")
+                req = urllib.request.Request(self._base_url)
                 
-                # 使用缓冲区处理可能跨行的数据
-                buffer = ""
-                for chunk in response.iter_content(chunk_size=4096, decode_unicode=True):
-                    if not self._sse_running:
-                        break
+                with urllib.request.urlopen(req, timeout=120) as response:
+                    logger.info(f"SSE连接已建立, status={response.status}")
                     
-                    if chunk:
-                        buffer += chunk
+                    # 使用缓冲区处理可能跨行的数据
+                    buffer = ""
+                    while self._sse_running:
+                        chunk = response.read(4096)
+                        if not chunk:
+                            break
+                        
+                        buffer += chunk.decode('utf-8')
                         # SSE消息以双换行符分隔
                         while "\n\n" in buffer:
                             message, buffer = buffer.split("\n\n", 1)
@@ -403,7 +412,7 @@ class LoginService:
                                     except json.JSONDecodeError as e:
                                         logger.warning(f"SSE数据JSON解析失败: {e}, data={data_str[:100]}")
                                 
-            except requests.exceptions.RequestException as e:
+            except (urllib.error.URLError, socket.timeout) as e:
                 if self._sse_running:
                     logger.warning(f"SSE连接断开: {e}")
                     time.sleep(1)  # 重连延迟

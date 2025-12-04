@@ -1905,7 +1905,8 @@ class HomePage:
         import logging
         import threading
         import time
-        import requests
+        import json
+        import urllib.request
         logger = logging.getLogger(__name__)
         
         pmhq_port = self.process_manager.get_pmhq_port()
@@ -1925,20 +1926,26 @@ class HomePage:
             max_attempts = 60  # 最多等待60秒
             for _ in range(max_attempts):
                 try:
-                    response = requests.post(url, json=payload, timeout=5)
-                    if response.status_code == 200:
-                        data = response.json()
-                        if data.get("type") == "call" and "data" in data:
-                            result = data["data"].get("result", {})
-                            uin = result.get("uin")
-                            if uin:
-                                logger.info(f"登录完成，uin: {uin}")
-                                # 在主线程中启动LLOneBot
-                                async def start_llonebot():
-                                    self._start_llonebot_service(config)
-                                if self.page:
-                                    self.page.run_task(start_llonebot)
-                                return
+                    req = urllib.request.Request(
+                        url,
+                        data=json.dumps(payload).encode('utf-8'),
+                        headers={'Content-Type': 'application/json'},
+                        method='POST'
+                    )
+                    with urllib.request.urlopen(req, timeout=5) as response:
+                        if response.status == 200:
+                            data = json.loads(response.read().decode('utf-8'))
+                            if data.get("type") == "call" and "data" in data:
+                                result = data["data"].get("result", {})
+                                uin = result.get("uin")
+                                if uin:
+                                    logger.info(f"登录完成，uin: {uin}")
+                                    # 在主线程中启动LLOneBot
+                                    async def start_llonebot():
+                                        self._start_llonebot_service(config)
+                                    if self.page:
+                                        self.page.run_task(start_llonebot)
+                                    return
                 except Exception:
                     pass
                 time.sleep(1)

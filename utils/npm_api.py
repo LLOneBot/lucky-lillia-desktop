@@ -1,7 +1,10 @@
 """NPM Registry API封装 - 用于查询npm包的最新版本信息"""
 
 import re
-import requests
+import json
+import urllib.request
+import urllib.error
+import socket
 from typing import Optional, Dict, Any, List
 from utils.constants import UPDATE_CHECK_TIMEOUT, NPM_REGISTRY_MIRRORS
 
@@ -68,17 +71,13 @@ def get_package_info(package_name: str, timeout: int = UPDATE_CHECK_TIMEOUT,
             else:
                 logger.warning(f"镜像 {registry} 返回空结果")
                 
-        except requests.exceptions.Timeout:
+        except socket.timeout:
             last_error = TimeoutError(f"NPM请求超时（{timeout}秒）: {registry}")
             logger.warning(f"镜像 {registry} 超时")
             continue
-        except requests.exceptions.ConnectionError as e:
-            last_error = NetworkError(f"网络连接失败: {e}")
-            logger.warning(f"镜像 {registry} 连接失败: {e}")
-            continue
-        except requests.exceptions.RequestException as e:
-            last_error = NetworkError(f"请求失败: {e}")
-            logger.warning(f"镜像 {registry} 请求失败: {e}")
+        except urllib.error.URLError as e:
+            last_error = NetworkError(f"网络连接失败: {e.reason}")
+            logger.warning(f"镜像 {registry} 连接失败: {e.reason}")
             continue
         except (ParseError, NpmAPIError) as e:
             last_error = e
@@ -100,38 +99,41 @@ def _get_package_from_registry(package_name: str, registry: str, timeout: int) -
     encoded_name = package_name.replace("/", "%2F")
     api_url = f"{registry.rstrip('/')}/{encoded_name}/latest"
     
-    response = requests.get(
+    req = urllib.request.Request(
         api_url,
-        timeout=timeout,
         headers={
             "Accept": "application/json",
             "User-Agent": "QQ-Bot-Manager"
         }
     )
     
-    # 检查HTTP状态码
-    if response.status_code == 404:
-        return None
-    
-    response.raise_for_status()
-    
-    # 解析JSON响应
     try:
-        data = response.json()
-    except ValueError as e:
-        raise ParseError(f"无法解析NPM API响应: {e}")
-    
-    # 验证必需字段
-    if "version" not in data:
-        raise ParseError("NPM API响应缺少version字段")
-    
-    return {
-        "name": data.get("name", package_name),
-        "version": data.get("version", ""),
-        "description": data.get("description", ""),
-        "dist": data.get("dist", {}),
-        "repository": data.get("repository", {}),
-    }
+        with urllib.request.urlopen(req, timeout=timeout) as response:
+            # 检查HTTP状态码
+            if response.status == 404:
+                return None
+            
+            # 解析JSON响应
+            try:
+                data = json.loads(response.read().decode('utf-8'))
+            except (json.JSONDecodeError, ValueError) as e:
+                raise ParseError(f"无法解析NPM API响应: {e}")
+            
+            # 验证必需字段
+            if "version" not in data:
+                raise ParseError("NPM API响应缺少version字段")
+            
+            return {
+                "name": data.get("name", package_name),
+                "version": data.get("version", ""),
+                "description": data.get("description", ""),
+                "dist": data.get("dist", {}),
+                "repository": data.get("repository", {}),
+            }
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return None
+        raise NetworkError(f"HTTP错误 {e.code}: {e.reason}")
 
 
 def get_package_tarball_url(package_name: str, version: Optional[str] = None,
