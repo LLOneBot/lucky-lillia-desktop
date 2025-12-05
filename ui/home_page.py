@@ -2298,7 +2298,9 @@ class HomePage:
         logger.info("开始检查组件更新...")
         
         # 设置回调
-        def on_check_complete(updates_found):
+        def on_check_complete(all_check_results):
+            # 只过滤出真正有更新的组件（has_update=True）
+            updates_found = [(name, info) for name, info in all_check_results if info.has_update]
             if updates_found:
                 update_names = [name for name, _ in updates_found]
                 logger.info(f"发现更新: {', '.join(update_names)}")

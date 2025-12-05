@@ -459,7 +459,27 @@ class MainWindow:
         
         self.close_dialog = ft.AlertDialog(
             modal=True,
-            title=ft.Text("关闭窗口", text_align=ft.TextAlign.CENTER, width=250),
+            title=ft.Stack(
+                [
+                    ft.Container(
+                        content=ft.Text("关闭窗口", text_align=ft.TextAlign.CENTER),
+                        alignment=ft.alignment.center,
+                        width=250,
+                    ),
+                    ft.Container(
+                        content=ft.IconButton(
+                            icon=ft.Icons.CLOSE,
+                            icon_size=18,
+                            on_click=lambda e: self.page.close(self.close_dialog) if self.page else None,
+                            tooltip="取消",
+                        ),
+                        alignment=ft.alignment.center_right,
+                        width=250,
+                    ),
+                ],
+                width=250,
+                height=40,
+            ),
             content=ft.Row(
                 [
                     ft.Checkbox(
