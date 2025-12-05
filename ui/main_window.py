@@ -486,9 +486,7 @@ class MainWindow:
         )
         
         if self.page:
-            self.page.overlay.append(self.close_dialog)
-            self.close_dialog.open = True
-            self.page.update()
+            self.page.open(self.close_dialog)
     
     def _on_close_choice(self, to_tray: bool):
         """处理关闭选择
@@ -497,10 +495,8 @@ class MainWindow:
             to_tray: True表示收进托盘，False表示直接退出
         """
         # 关闭对话框
-        if self.close_dialog:
-            self.close_dialog.open = False
-            if self.page:
-                self.page.update()
+        if self.close_dialog and self.page:
+            self.page.close(self.close_dialog)
         
         # 如果用户选择记住，保存设置
         if self.remember_choice:
@@ -573,6 +569,14 @@ class MainWindow:
         if self.resource_monitor_thread and self.resource_monitor_thread.is_alive():
             timeout = 0.1 if force_cleanup else 0.2  # 减少等待时间
             self.resource_monitor_thread.join(timeout=timeout)
+        
+        # 清理日志页面资源
+        if hasattr(self, 'log_page') and self.log_page:
+            self.log_page.cleanup()
+        
+        # 清理日志收集器回调
+        if self.log_collector:
+            self.log_collector.clear_callbacks()
         
         # 停止托盘图标
         if self.tray_icon:

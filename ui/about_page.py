@@ -369,9 +369,10 @@ class AboutPage:
         if self.page:
             self.page.update()
         
-        def on_check_complete(updates_found):
+        def on_check_complete(all_check_results):
             async def update_ui():
-                for name, info in updates_found:
+                # 更新所有卡片的检查结果（包括没有更新的）
+                for name, info in all_check_results:
                     if name == "管理器":
                         self.app_card.update_check_result(info)
                     elif name == "PMHQ":
@@ -382,7 +383,9 @@ class AboutPage:
                 self.check_update_button.disabled = False
                 self.loading_indicator.visible = False
                 
-                if updates_found:
+                # 检查是否有任何组件需要更新
+                has_any_update = any(info.has_update for _, info in all_check_results)
+                if has_any_update:
                     self.check_update_button.text = "立即更新"
                     self.check_update_button.icon = ft.Icons.DOWNLOAD
                 else:
@@ -436,11 +439,13 @@ class AboutPage:
         running = self.update_manager.has_running_processes()
         
         def on_confirm(e):
-            self._close_dialog(confirm_dialog)
+            if self.page:
+                self.page.close(confirm_dialog)
             self._do_download_all_updates()
         
         def on_cancel(e):
-            self._close_dialog(confirm_dialog)
+            if self.page:
+                self.page.close(confirm_dialog)
         
         if running:
             content_text = (
@@ -463,9 +468,7 @@ class AboutPage:
         )
         
         if self.page:
-            self.page.overlay.append(confirm_dialog)
-            confirm_dialog.open = True
-            self.page.update()
+            self.page.open(confirm_dialog)
     
     def _do_download_all_updates(self):
         """执行下载所有更新"""
@@ -484,12 +487,11 @@ class AboutPage:
                 progress_bar,
             ], spacing=12, tight=True),
             modal=True,
+            actions=[],  # 空的actions列表，避免渲染问题
         )
         
         if self.page:
-            self.page.overlay.append(download_dialog)
-            download_dialog.open = True
-            self.page.update()
+            self.page.open(download_dialog)
         
         def on_download_status(status: str):
             async def update_status():
@@ -512,7 +514,19 @@ class AboutPage:
         
         def on_download_complete(success_list, error_list, had_running_processes):
             async def on_complete():
-                download_dialog.open = False
+                # 先显示完成状态
+                progress_bar.value = 1.0
+                progress_text.value = "更新完成！"
+                if self.page:
+                    self.page.update()
+                
+                # 短暂延迟后关闭对话框
+                import asyncio
+                await asyncio.sleep(0.5)
+                
+                # 关闭下载对话框
+                if self.page:
+                    self.page.close(download_dialog)
                 
                 self.check_update_button.text = "检查更新"
                 self.check_update_button.icon = ft.Icons.CLOUD_DOWNLOAD
@@ -580,9 +594,7 @@ class AboutPage:
         )
         
         if self.page:
-            self.page.overlay.append(restart_dialog)
-            restart_dialog.open = True
-            self.page.update()
+            self.page.open(restart_dialog)
     
     def _open_url(self, url: str):
         """打开URL"""
@@ -591,9 +603,8 @@ class AboutPage:
     
     def _close_dialog(self, dialog: ft.AlertDialog):
         """关闭对话框"""
-        dialog.open = False
         if self.page:
-            self.page.update()
+            self.page.close(dialog)
     
     def refresh(self):
         """刷新页面（重新加载版本信息）"""

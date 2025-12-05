@@ -1,10 +1,8 @@
 """GitHub镜像管理工具 - 管理和选择可用的GitHub镜像"""
 
-import urllib.request
-import urllib.error
-import socket
 from typing import List, Optional
 from utils.constants import GITHUB_MIRRORS
+from utils.http_client import HttpClient, HttpError
 
 
 class MirrorManager:
@@ -19,6 +17,7 @@ class MirrorManager:
         self.timeout = timeout
         self.mirrors = GITHUB_MIRRORS.copy()
         self._available_mirror: Optional[str] = None
+        self._client = HttpClient(timeout=timeout)
     
     def get_available_mirror(self) -> str:
         """获取可用的镜像
@@ -53,23 +52,14 @@ class MirrorManager:
         """
         try:
             # 构造一个简单的测试URL（GitHub主页）
-            if mirror.endswith("/"):
-                test_url = mirror
-            else:
-                test_url = mirror + "/"
+            test_url = mirror if mirror.endswith("/") else mirror + "/"
             
             # 发送HEAD请求测试连接
-            req = urllib.request.Request(
-                test_url,
-                method='HEAD',
-                headers={"User-Agent": "Lucky-Lillia"}
-            )
+            resp = self._client.head(test_url, timeout=self.timeout)
+            # 2xx或3xx状态码都认为是可用的
+            return resp.status < 400
             
-            with urllib.request.urlopen(req, timeout=self.timeout) as response:
-                # 2xx或3xx状态码都认为是可用的
-                return response.status < 400
-            
-        except (socket.timeout, urllib.error.URLError, urllib.error.HTTPError):
+        except HttpError:
             return False
     
     def reset_cache(self):

@@ -4,12 +4,14 @@ import os
 import shutil
 import zipfile
 import tarfile
-import urllib.request
-import urllib.error
-import socket
+import logging
 from typing import Optional, Callable
 from utils.constants import UPDATE_CHECK_TIMEOUT, NPM_PACKAGES, NPM_REGISTRY_MIRRORS
 from utils.npm_api import get_package_info, get_package_tarball_url, NpmAPIError, NetworkError, TimeoutError
+from utils.http_client import HttpClient, TimeoutError as HttpTimeoutError, ConnectionError as HttpConnectionError
+
+
+logger = logging.getLogger(__name__)
 
 
 class DownloadError(Exception):
@@ -158,13 +160,11 @@ class Downloader:
         Raises:
             NetworkError: 下载失败
         """
-        import logging
-        logger = logging.getLogger(__name__)
-        
         if skip_files is None:
             skip_files = []
         
         last_error = None
+        client = HttpClient(timeout=self.timeout)
         
         # 尝试从不同镜像下载
         urls_to_try = [tarball_url]
@@ -180,33 +180,28 @@ class Downloader:
             try:
                 logger.info(f"尝试下载: {url}")
                 
-                req = urllib.request.Request(
-                    url,
-                    headers={"User-Agent": "QQ-Bot-Manager"}
-                )
+                # 确保目录存在
+                os.makedirs(extract_dir, exist_ok=True)
                 
-                with urllib.request.urlopen(req, timeout=self.timeout) as response:
-                    total_size = int(response.headers.get('content-length', 0))
-                    
-                    # 确保目录存在
-                    os.makedirs(extract_dir, exist_ok=True)
-                    
-                    # 临时文件路径
-                    temp_file = os.path.join(extract_dir, "temp_download.tgz")
-                    
-                    # 下载文件
-                    downloaded_size = 0
-                    chunk_size = 8192
-                    
-                    with open(temp_file, 'wb') as f:
-                        while True:
-                            chunk = response.read(chunk_size)
-                            if not chunk:
-                                break
-                            f.write(chunk)
-                            downloaded_size += len(chunk)
-                            if progress_callback:
-                                progress_callback(downloaded_size, total_size)
+                # 临时文件路径
+                temp_file = os.path.join(extract_dir, "temp_download.tgz")
+                
+                # 下载文件（带进度回调）
+                downloaded_size = [0]  # 用列表以便在闭包中修改
+                
+                def on_chunk(chunk, downloaded, total):
+                    downloaded_size[0] = downloaded
+                    if progress_callback:
+                        progress_callback(downloaded, total)
+                
+                resp = client.download(url, chunk_callback=on_chunk, timeout=self.timeout)
+                
+                if resp.status >= 400:
+                    raise NetworkError(f"HTTP错误 {resp.status}")
+                
+                # 保存到临时文件
+                with open(temp_file, 'wb') as f:
+                    f.write(resp.data)
                 
                 # 解压tarball
                 try:
@@ -242,17 +237,13 @@ class Downloader:
                 except tarfile.TarError as e:
                     raise NetworkError(f"解压失败，文件可能已损坏: {e}")
                     
-            except socket.timeout:
+            except HttpTimeoutError:
                 last_error = TimeoutError(f"下载超时（{self.timeout}秒）: {url}")
                 logger.warning(f"下载超时: {url}")
                 continue
-            except urllib.error.URLError as e:
-                last_error = NetworkError(f"网络连接失败: {e.reason}")
+            except HttpConnectionError as e:
+                last_error = NetworkError(f"网络连接失败: {e}")
                 logger.warning(f"连接失败: {url}")
-                continue
-            except urllib.error.HTTPError as e:
-                last_error = NetworkError(f"HTTP错误 {e.code}: {e.reason}")
-                logger.warning(f"请求失败: {url}")
                 continue
             except OSError as e:
                 raise NetworkError(f"文件保存失败: {e}")

@@ -22,6 +22,7 @@ class LogPage:
         self._is_page_visible = False  # 页面是否可见
         self._auto_refresh_enabled = True  # 自动刷新开关状态
         self._auto_refresh_thread: Optional[threading.Thread] = None
+        self._stop_event = threading.Event()  # 用于停止自动刷新线程
 
     def build(self):
         """构建UI组件"""
@@ -154,8 +155,10 @@ class LogPage:
 
     def _auto_refresh_loop(self):
         """自动刷新循环"""
-        while True:
-            time.sleep(self.AUTO_REFRESH_INTERVAL)
+        while not self._stop_event.is_set():
+            # 使用 Event.wait 替代 time.sleep，可以被快速中断
+            if self._stop_event.wait(timeout=self.AUTO_REFRESH_INTERVAL):
+                break
             # 只有页面可见且开启自动刷新时才更新
             if self._is_page_visible and self._auto_refresh_enabled:
                 self._load_logs()
@@ -163,10 +166,17 @@ class LogPage:
     def _start_auto_refresh(self):
         """启动自动刷新线程"""
         if self._auto_refresh_thread is None or not self._auto_refresh_thread.is_alive():
+            self._stop_event.clear()  # 重置停止事件
             self._auto_refresh_thread = threading.Thread(
                 target=self._auto_refresh_loop, daemon=True
             )
             self._auto_refresh_thread.start()
+    
+    def cleanup(self):
+        """清理资源，停止自动刷新线程"""
+        self._stop_event.set()
+        if self._auto_refresh_thread and self._auto_refresh_thread.is_alive():
+            self._auto_refresh_thread.join(timeout=1.0)
 
     def refresh(self):
         """刷新页面"""

@@ -787,15 +787,13 @@ class HomePage:
     def _show_stop_confirm_dialog(self):
         """显示停止确认对话框"""
         def on_confirm(e):
-            dialog.open = False
             if self.page:
-                self.page.update()
+                self.page.close(dialog)
             self._do_stop_services(stop_qq=True)
         
         def on_cancel(e):
-            dialog.open = False
             if self.page:
-                self.page.update()
+                self.page.close(dialog)
         
         dialog = ft.AlertDialog(
             modal=True,
@@ -816,9 +814,7 @@ class HomePage:
         )
         
         if self.page:
-            self.page.overlay.append(dialog)
-            dialog.open = True
-            self.page.update()
+            self.page.open(dialog)
     
     def _do_stop_services(self, stop_qq: bool = False):
         """实际执行停止服务
@@ -1022,12 +1018,12 @@ class HomePage:
         self.download_progress_text.value = "准备下载..."
         self.download_status_text.value = "0 MB / 0 MB (0%)"
         self.download_cancel_button.disabled = False
+        self.download_cancel_button.text = "取消"
         self.is_downloading = True
         
         # 显示对话框
-        self.page.overlay.append(self.download_dialog)
-        self.download_dialog.open = True
-        self.page.update()
+        if self.page:
+            self.page.open(self.download_dialog)
         logger.info("下载对话框已显示")
         
         # 开始下载（在后台线程中）
@@ -1090,8 +1086,7 @@ class HomePage:
                 time.sleep(1)
                 
                 if self.page:
-                    self.download_dialog.open = False
-                    self.page.update()
+                    self.page.close(self.download_dialog)
                 
                 # 检查Node.exe是否需要下载（同时检查版本 >= 22）
                 config = self.config_manager.load_config()
@@ -1148,8 +1143,7 @@ class HomePage:
         self.is_downloading = False
         self._update_button_state(False)  # 恢复按钮状态
         if self.page:
-            self.download_dialog.open = False
-            self.page.update()
+            self.page.close(self.download_dialog)
     
     def _show_llonebot_download_dialog(self):
         """显示LLOneBot下载对话框并开始下载"""
@@ -1166,12 +1160,11 @@ class HomePage:
         self.llonebot_download_progress_text.value = "准备下载..."
         self.llonebot_download_status_text.value = "0 MB / 0 MB (0%)"
         self.llonebot_download_cancel_button.disabled = False
+        self.llonebot_download_cancel_button.text = "取消"
         self.is_downloading_llonebot = True
         
         # 显示对话框
-        self.page.overlay.append(self.download_llonebot_dialog)
-        self.download_llonebot_dialog.open = True
-        self.page.update()
+        self.page.open(self.download_llonebot_dialog)
         logger.info("LLOneBot下载对话框已显示")
         
         # 开始下载（在后台线程中）
@@ -1238,8 +1231,7 @@ class HomePage:
                 time.sleep(1)
                 
                 if self.page:
-                    self.download_llonebot_dialog.open = False
-                    self.page.update()
+                    self.page.close(self.download_llonebot_dialog)
                 
                 # 启动所有服务
                 self._start_all_services()
@@ -1266,8 +1258,7 @@ class HomePage:
         self.is_downloading_llonebot = False
         self._update_button_state(False)  # 恢复按钮状态
         if self.page:
-            self.download_llonebot_dialog.open = False
-            self.page.update()
+            self.page.close(self.download_llonebot_dialog)
     
     def _show_node_download_dialog(self):
         """显示Node.exe下载对话框并开始下载"""
@@ -1284,12 +1275,11 @@ class HomePage:
         self.node_download_progress_text.value = "准备下载..."
         self.node_download_status_text.value = "0 MB / 0 MB (0%)"
         self.node_download_cancel_button.disabled = False
+        self.node_download_cancel_button.text = "取消"
         self.is_downloading_node = True
         
         # 显示对话框
-        self.page.overlay.append(self.download_node_dialog)
-        self.download_node_dialog.open = True
-        self.page.update()
+        self.page.open(self.download_node_dialog)
         logger.info("Node.exe下载对话框已显示")
         
         # 开始下载（在后台线程中）
@@ -1351,8 +1341,7 @@ class HomePage:
                 time.sleep(1)
                 
                 if self.page:
-                    self.download_node_dialog.open = False
-                    self.page.update()
+                    self.page.close(self.download_node_dialog)
                 
                 # 检查FFmpeg/FFprobe是否需要下载（它们在同一个npm包中）
                 config = self.config_manager.load_config()
@@ -1398,8 +1387,7 @@ class HomePage:
         self.is_downloading_node = False
         self._update_button_state(False)  # 恢复按钮状态
         if self.page:
-            self.download_node_dialog.open = False
-            self.page.update()
+            self.page.close(self.download_node_dialog)
     
     def _build_ffmpeg_download_dialog(self):
         """构建FFmpeg.exe下载对话框"""
@@ -1468,12 +1456,11 @@ class HomePage:
         self.ffmpeg_download_progress_text.value = "准备下载..."
         self.ffmpeg_download_status_text.value = "0 MB / 0 MB (0%)"
         self.ffmpeg_download_cancel_button.disabled = False
+        self.ffmpeg_download_cancel_button.text = "取消"
         self.is_downloading_ffmpeg = True
         
         # 显示对话框
-        self.page.overlay.append(self.download_ffmpeg_dialog)
-        self.download_ffmpeg_dialog.open = True
-        self.page.update()
+        self.page.open(self.download_ffmpeg_dialog)
         logger.info("FFmpeg.exe下载对话框已显示")
         
         # 开始下载（在后台线程中）
@@ -1535,8 +1522,7 @@ class HomePage:
                 time.sleep(1)
                 
                 if self.page:
-                    self.download_ffmpeg_dialog.open = False
-                    self.page.update()
+                    self.page.close(self.download_ffmpeg_dialog)
                 
                 # ffmpeg和ffprobe在同一个npm包中，下载ffmpeg后ffprobe也会存在
                 # 检查LLOneBot是否需要下载
@@ -1573,8 +1559,7 @@ class HomePage:
         self.is_downloading_ffmpeg = False
         self._update_button_state(False)  # 恢复按钮状态
         if self.page:
-            self.download_ffmpeg_dialog.open = False
-            self.page.update()
+            self.page.close(self.download_ffmpeg_dialog)
     
     def _build_ffprobe_download_dialog(self):
         """构建FFprobe.exe下载对话框"""
@@ -1643,12 +1628,11 @@ class HomePage:
         self.ffprobe_download_progress_text.value = "准备下载..."
         self.ffprobe_download_status_text.value = "0 MB / 0 MB (0%)"
         self.ffprobe_download_cancel_button.disabled = False
+        self.ffprobe_download_cancel_button.text = "取消"
         self.is_downloading_ffprobe = True
         
         # 显示对话框
-        self.page.overlay.append(self.download_ffprobe_dialog)
-        self.download_ffprobe_dialog.open = True
-        self.page.update()
+        self.page.open(self.download_ffprobe_dialog)
         logger.info("FFprobe.exe下载对话框已显示")
         
         # 开始下载（在后台线程中）
@@ -1710,8 +1694,7 @@ class HomePage:
                 time.sleep(1)
                 
                 if self.page:
-                    self.download_ffprobe_dialog.open = False
-                    self.page.update()
+                    self.page.close(self.download_ffprobe_dialog)
                 
                 # 检查LLOneBot是否需要下载
                 config = self.config_manager.load_config()
@@ -1747,8 +1730,7 @@ class HomePage:
         self.is_downloading_ffprobe = False
         self._update_button_state(False)  # 恢复按钮状态
         if self.page:
-            self.download_ffprobe_dialog.open = False
-            self.page.update()
+            self.page.close(self.download_ffprobe_dialog)
     
     def _start_all_services(self):
         """启动所有服务"""
@@ -1905,8 +1887,7 @@ class HomePage:
         import logging
         import threading
         import time
-        import json
-        import urllib.request
+        from utils.http_client import HttpClient
         logger = logging.getLogger(__name__)
         
         pmhq_port = self.process_manager.get_pmhq_port()
@@ -1923,29 +1904,24 @@ class HomePage:
                 }
             }
             
+            client = HttpClient(timeout=5)
             max_attempts = 60  # 最多等待60秒
             for _ in range(max_attempts):
                 try:
-                    req = urllib.request.Request(
-                        url,
-                        data=json.dumps(payload).encode('utf-8'),
-                        headers={'Content-Type': 'application/json'},
-                        method='POST'
-                    )
-                    with urllib.request.urlopen(req, timeout=5) as response:
-                        if response.status == 200:
-                            data = json.loads(response.read().decode('utf-8'))
-                            if data.get("type") == "call" and "data" in data:
-                                result = data["data"].get("result", {})
-                                uin = result.get("uin")
-                                if uin:
-                                    logger.info(f"登录完成，uin: {uin}")
-                                    # 在主线程中启动LLOneBot
-                                    async def start_llonebot():
-                                        self._start_llonebot_service(config)
-                                    if self.page:
-                                        self.page.run_task(start_llonebot)
-                                    return
+                    resp = client.post(url, json_data=payload, timeout=5)
+                    if resp.status == 200:
+                        data = resp.json()
+                        if data.get("type") == "call" and "data" in data:
+                            result = data["data"].get("result", {})
+                            uin = result.get("uin")
+                            if uin:
+                                logger.info(f"登录完成，uin: {uin}")
+                                # 在主线程中启动LLOneBot
+                                async def start_llonebot():
+                                    self._start_llonebot_service(config)
+                                if self.page:
+                                    self.page.run_task(start_llonebot)
+                                return
                 except Exception:
                     pass
                 time.sleep(1)
@@ -2073,15 +2049,12 @@ class HomePage:
             ],
         )
         
-        self.page.overlay.append(error_dialog)
-        error_dialog.open = True
-        self.page.update()
+        self.page.open(error_dialog)
     
     def _close_dialog(self, dialog):
         """关闭对话框"""
         if self.page:
-            dialog.open = False
-            self.page.update()
+            self.page.close(dialog)
     
     def set_page(self, page):
         """设置页面引用（用于显示对话框）"""
@@ -2373,14 +2346,12 @@ class HomePage:
         running = self.update_manager.has_running_processes()
         
         def on_cancel(e):
-            confirm_dialog.open = False
             if self.page:
-                self.page.update()
+                self.page.close(confirm_dialog)
         
         def on_confirm(e):
-            confirm_dialog.open = False
             if self.page:
-                self.page.update()
+                self.page.close(confirm_dialog)
             self._start_component_updates()
         
         if running:
@@ -2404,9 +2375,7 @@ class HomePage:
         )
         
         if self.page:
-            self.page.overlay.append(confirm_dialog)
-            confirm_dialog.open = True
-            self.page.update()
+            self.page.open(confirm_dialog)
     
     def _start_component_updates(self):
         """开始下载组件更新"""
@@ -2429,12 +2398,11 @@ class HomePage:
                 progress_bar,
             ], spacing=12, tight=True),
             modal=True,
+            actions=[],  # 空的actions列表，避免渲染问题
         )
         
         if self.page:
-            self.page.overlay.append(download_dialog)
-            download_dialog.open = True
-            self.page.update()
+            self.page.open(download_dialog)
         
         # 设置回调
         def on_download_status(status: str):
@@ -2458,7 +2426,19 @@ class HomePage:
         
         def on_download_complete(success_list, error_list, had_running_processes):
             async def on_complete():
-                download_dialog.open = False
+                # 先显示完成状态
+                progress_bar.value = 1.0
+                progress_text.value = "更新完成！"
+                if self.page:
+                    self.page.update()
+                
+                # 短暂延迟后关闭对话框
+                import asyncio
+                await asyncio.sleep(0.5)
+                
+                # 关闭下载对话框
+                if self.page:
+                    self.page.close(download_dialog)
                 self.update_banner.visible = False
                 if self.page:
                     self.page.update()
@@ -2481,12 +2461,6 @@ class HomePage:
         
         # 异步下载所有更新
         self.update_manager.download_all_updates_async()
-    
-    def _close_dialog(self, dialog: ft.AlertDialog):
-        """关闭对话框"""
-        dialog.open = False
-        if self.page:
-            self.page.update()
 
     def _auto_restart_after_update(self):
         """更新完成后自动重新启动服务"""
@@ -2541,6 +2515,10 @@ class HomePage:
             if other_updates:
                 other_msg = f"\n\n其他组件（{', '.join(other_updates)}）已更新，请重新启动服务以使用新版本。"
             
+            def close_info_dialog(ev):
+                if self.page:
+                    self.page.close(info_dialog)
+            
             info_dialog = ft.AlertDialog(
                 title=ft.Text("稍后更新"),
                 content=ft.Text(
@@ -2548,13 +2526,11 @@ class HomePage:
                     f"退出程序时将自动完成更新。{other_msg}"
                 ),
                 actions=[
-                    ft.TextButton("确定", on_click=lambda e: self._close_dialog(info_dialog))
+                    ft.TextButton("确定", on_click=close_info_dialog)
                 ],
             )
             if self.page:
-                self.page.overlay.append(info_dialog)
-                info_dialog.open = True
-                self.page.update()
+                self.page.open(info_dialog)
         
         # 构建消息
         msg = "管理器新版本已下载完成！\n\n需要重启程序以完成更新。"
@@ -2574,9 +2550,7 @@ class HomePage:
             actions_alignment=ft.MainAxisAlignment.END,
         )
         if self.page:
-            self.page.overlay.append(restart_dialog)
-            restart_dialog.open = True
-            self.page.update()
+            self.page.open(restart_dialog)
     
     def get_pending_update_script(self) -> Optional[str]:
         """获取待执行的更新脚本路径

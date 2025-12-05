@@ -255,9 +255,7 @@ def main(page: ft.Page):
             ],
         )
         
-        page.overlay.append(error_dialog)
-        error_dialog.open = True
-        page.update()
+        page.open(error_dialog)
 
 
 if __name__ == "__main__":

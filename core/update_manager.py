@@ -138,7 +138,8 @@ class UpdateManager:
             self._on_check_start()
         
         try:
-            updates_found = []
+            updates_found = []  # 有更新的组件
+            all_check_results = []  # 所有检查结果（用于UI显示）
             
             # 检查管理器更新
             if "app" in versions and versions["app"] and versions["app"] != "未知":
@@ -147,6 +148,7 @@ class UpdateManager:
                 if app_package:
                     app_update = self.update_checker.check_update(app_package, versions["app"], app_repo)
                     logger.info(f"管理器更新检查: has_update={app_update.has_update}, latest={app_update.latest_version}")
+                    all_check_results.append(("管理器", app_update))
                     if app_update.has_update:
                         updates_found.append(("管理器", app_update))
             
@@ -157,6 +159,7 @@ class UpdateManager:
                 if pmhq_package:
                     pmhq_update = self.update_checker.check_update(pmhq_package, versions["pmhq"], pmhq_repo)
                     logger.info(f"PMHQ更新检查: has_update={pmhq_update.has_update}, latest={pmhq_update.latest_version}")
+                    all_check_results.append(("PMHQ", pmhq_update))
                     if pmhq_update.has_update:
                         updates_found.append(("PMHQ", pmhq_update))
             
@@ -167,6 +170,7 @@ class UpdateManager:
                 if llonebot_package:
                     llonebot_update = self.update_checker.check_update(llonebot_package, versions["llonebot"], llonebot_repo)
                     logger.info(f"LLOneBot更新检查: has_update={llonebot_update.has_update}, latest={llonebot_update.latest_version}")
+                    all_check_results.append(("LLOneBot", llonebot_update))
                     if llonebot_update.has_update:
                         updates_found.append(("LLOneBot", llonebot_update))
             
@@ -179,8 +183,9 @@ class UpdateManager:
             else:
                 logger.info("所有组件已是最新版本")
             
+            # 回调传递所有检查结果，让UI可以显示"已是最新版本"
             if self._on_check_complete:
-                self._on_check_complete(updates_found)
+                self._on_check_complete(all_check_results)
                 
         except Exception as e:
             logger.error(f"检查更新失败: {e}", exc_info=True)

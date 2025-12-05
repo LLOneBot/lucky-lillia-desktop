@@ -12,9 +12,8 @@ from typing import Optional, Dict, Callable
 import threading
 import time
 
-import requests
-
 from utils.port import get_available_port
+from utils.http_client import HttpClient, HttpError
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +57,7 @@ class ProcessManager:
         self._qq_pid: Optional[int] = None  # 存储QQ进程的PID
         self._qq_resources: Dict[str, float] = {"cpu": 0.0, "memory": 0.0}  # QQ进程资源占用
         self._qq_process: Optional["psutil.Process"] = None  # 缓存QQ进程对象（用于正确计算CPU）
+        self._http_client: Optional[HttpClient] = None  # 共享的HTTP客户端实例
         
     def start_pmhq(self, pmhq_path: str, config_path: str = "pmhq_config.json", 
                    qq_path: str = "", auto_login_qq: str = "", headless: bool = False) -> bool:
@@ -758,6 +758,7 @@ class ProcessManager:
         
         max_attempts = 1200  # 最多尝试次数，一秒一次
         attempt = 0
+        client = self._get_http_client()
         
         while attempt < max_attempts:
             # 检查PMHQ是否还在运行
@@ -766,14 +767,10 @@ class ProcessManager:
                 return
             
             try:
-                response = requests.post(
-                    url,
-                    json=payload,
-                    timeout=5
-                )
+                resp = client.post(url, json_data=payload, timeout=5)
                 
-                if response.status_code == 200:
-                    data = response.json()
+                if resp.status == 200:
+                    data = resp.json()
                     if data.get("type") == "call" and "data" in data:
                         result = data["data"].get("result", {})
                         uin = result.get("uin")
@@ -807,7 +804,7 @@ class ProcessManager:
                                 # uin获取到了但nickname为空，继续尝试
                                 logger.debug(f"获取到uin: {uin}，但nickname为空，继续尝试...")
                         
-            except requests.exceptions.RequestException as e:
+            except HttpError as e:
                 logger.debug(f"获取uin请求失败 (尝试 {attempt + 1}/{max_attempts}): {e}")
             except json.JSONDecodeError as e:
                 logger.debug(f"解析uin响应失败: {e}")
@@ -834,6 +831,16 @@ class ProcessManager:
             字典，包含 cpu（百分比）和 memory（MB）
         """
         return self._qq_resources.copy()
+    
+    def _get_http_client(self) -> HttpClient:
+        """获取共享的HTTP客户端实例（懒加载）
+        
+        Returns:
+            HttpClient实例
+        """
+        if self._http_client is None:
+            self._http_client = HttpClient(timeout=5)
+        return self._http_client
     
     def fetch_qq_process_info(self) -> Optional[int]:
         """从PMHQ获取QQ进程信息
@@ -878,15 +885,12 @@ class ProcessManager:
         }
         
         try:
-            response = requests.post(
-                url,
-                json=payload,
-                timeout=5
-            )
+            client = self._get_http_client()
+            resp = client.post(url, json_data=payload, timeout=5)
             
-            logger.info(f"getProcessInfo响应状态码: {response.status_code}")
-            if response.status_code == 200:
-                data = response.json()
+            logger.info(f"getProcessInfo响应状态码: {resp.status}")
+            if resp.status == 200:
+                data = resp.json()
                 logger.info(f"getProcessInfo响应数据: {data}")
                 if data.get("type") == "call" and "data" in data:
                     result = data["data"].get("result", {})
@@ -902,9 +906,9 @@ class ProcessManager:
                 else:
                     logger.info(f"getProcessInfo响应格式不正确: type={data.get('type')}, data存在={('data' in data)}")
             else:
-                logger.info(f"getProcessInfo请求失败，状态码: {response.status_code}, 响应: {response.text}")
+                logger.info(f"getProcessInfo请求失败，状态码: {resp.status}, 响应: {resp.text()}")
                         
-        except requests.exceptions.RequestException as e:
+        except HttpError as e:
             logger.info(f"获取QQ进程信息请求失败: {e}")
         except json.JSONDecodeError as e:
             logger.info(f"解析QQ进程信息响应失败: {e}")

@@ -212,7 +212,8 @@ class LogCollector:
         Args:
             callback: 回调函数，接收LogEntry参数
         """
-        self._callbacks.append(callback)
+        if callback not in self._callbacks:
+            self._callbacks.append(callback)
     
     def add_callback(self, callback: Callable[[LogEntry], None]) -> None:
         """添加新日志回调函数（set_callback的别名）
@@ -220,6 +221,20 @@ class LogCollector:
         Args:
             callback: 回调函数，接收LogEntry参数
         """
-        self._callbacks.append(callback)
+        if callback not in self._callbacks:
+            self._callbacks.append(callback)
+    
+    def remove_callback(self, callback: Callable[[LogEntry], None]) -> None:
+        """移除日志回调函数
+        
+        Args:
+            callback: 要移除的回调函数
+        """
+        if callback in self._callbacks:
+            self._callbacks.remove(callback)
+    
+    def clear_callbacks(self) -> None:
+        """清除所有回调函数"""
+        self._callbacks.clear()
 
 

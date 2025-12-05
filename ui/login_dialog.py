@@ -95,9 +95,7 @@ class LoginDialog:
                     self._build_qrcode_login_dialog()
                 
                 if self.dialog:
-                    self.page.overlay.append(self.dialog)
-                    self.dialog.open = True
-                    self.page.update()
+                    self.page.open(self.dialog)
             
             if self.page:
                 self.page.run_task(show_dialog)
@@ -386,8 +384,7 @@ class LoginDialog:
     def _uin_check_loop(self):
         """循环检查uin是否已获取（表示登录成功）"""
         import time
-        import json
-        import urllib.request
+        from utils.http_client import HttpClient
         
         url = f"http://127.0.0.1:{self.pmhq_port}"
         payload = {
@@ -398,24 +395,19 @@ class LoginDialog:
             }
         }
         
+        client = HttpClient(timeout=5)
         while self._uin_check_running:
             try:
-                req = urllib.request.Request(
-                    url,
-                    data=json.dumps(payload).encode('utf-8'),
-                    headers={'Content-Type': 'application/json'},
-                    method='POST'
-                )
-                with urllib.request.urlopen(req, timeout=5) as response:
-                    if response.status == 200:
-                        data = json.loads(response.read().decode('utf-8'))
-                        if data.get("type") == "call" and "data" in data:
-                            result = data["data"].get("result", {})
-                            uin = result.get("uin")
-                            if uin:
-                                # 登录成功
-                                self._handle_login_success(uin)
-                                return
+                resp = client.post(url, json_data=payload, timeout=5)
+                if resp.status == 200:
+                    data = resp.json()
+                    if data.get("type") == "call" and "data" in data:
+                        result = data["data"].get("result", {})
+                        uin = result.get("uin")
+                        if uin:
+                            # 登录成功
+                            self._handle_login_success(uin)
+                            return
             except Exception:
                 pass
             
@@ -430,10 +422,8 @@ class LoginDialog:
         self.login_service.stop_sse_listener()
         
         async def close_and_callback():
-            if self.dialog:
-                self.dialog.open = False
-            if self.page:
-                self.page.update()
+            if self.dialog and self.page:
+                self.page.close(self.dialog)
             
             if self.on_login_success:
                 self.on_login_success(uin)
@@ -499,12 +489,8 @@ class LoginDialog:
     def _show_account_list(self):
         """显示账号列表"""
         # 先关闭主登录对话框
-        if self.dialog:
-            self.dialog.open = False
-            if self.dialog in self.page.overlay:
-                self.page.overlay.remove(self.dialog)
-        if self.page:
-            self.page.update()
+        if self.dialog and self.page:
+            self.page.close(self.dialog)
         
         # 构建账号列表
         account_items = []
@@ -552,47 +538,31 @@ class LoginDialog:
         )
         
         if self.page:
-            self.page.overlay.append(self._account_dialog)
-            self._account_dialog.open = True
-            self.page.update()
+            self.page.open(self._account_dialog)
     
     def _on_account_cancel_click(self, e):
         """账号选择对话框取消按钮点击"""
         # 关闭账号选择对话框
-        if hasattr(self, '_account_dialog') and self._account_dialog:
-            self._account_dialog.open = False
-            if self._account_dialog in self.page.overlay:
-                self.page.overlay.remove(self._account_dialog)
-        
-        if self.page:
-            self.page.update()
+        if hasattr(self, '_account_dialog') and self._account_dialog and self.page:
+            self.page.close(self._account_dialog)
         
         # 重新显示主登录对话框
         self._build_quick_login_dialog()
-        if self.dialog:
-            self.page.overlay.append(self.dialog)
-            self.dialog.open = True
-            self.page.update()
+        if self.dialog and self.page:
+            self.page.open(self.dialog)
     
     def _on_account_selected(self, account: LoginAccount):
         """选择账号"""
         self.selected_account = account
         
         # 关闭账号选择对话框
-        if hasattr(self, '_account_dialog') and self._account_dialog:
-            self._account_dialog.open = False
-            if self._account_dialog in self.page.overlay:
-                self.page.overlay.remove(self._account_dialog)
-        
-        if self.page:
-            self.page.update()
+        if hasattr(self, '_account_dialog') and self._account_dialog and self.page:
+            self.page.close(self._account_dialog)
         
         # 重新构建并显示快速登录对话框（显示选中的账号）
         self._build_quick_login_dialog()
-        if self.dialog:
-            self.page.overlay.append(self.dialog)
-            self.dialog.open = True
-            self.page.update()
+        if self.dialog and self.page:
+            self.page.open(self.dialog)
     
     def _on_qrcode_click(self, e):
         """扫码登录按钮点击"""
@@ -602,17 +572,13 @@ class LoginDialog:
     def _switch_to_qrcode_mode(self):
         """切换到扫码登录模式"""
         # 关闭当前对话框
-        if self.dialog:
-            self.dialog.open = False
-        if self.page:
-            self.page.update()
+        if self.dialog and self.page:
+            self.page.close(self.dialog)
         
         # 构建并显示扫码登录对话框
         self._build_qrcode_login_dialog()
-        if self.dialog:
-            self.page.overlay.append(self.dialog)
-            self.dialog.open = True
-            self.page.update()
+        if self.dialog and self.page:
+            self.page.open(self.dialog)
     
     def _on_quick_login_mode_click(self, e):
         """快速登录模式按钮点击"""
@@ -631,10 +597,8 @@ class LoginDialog:
         threading.Thread(target=stop_background, daemon=True).start()
         
         # 关闭当前对话框
-        if self.dialog:
-            self.dialog.open = False
-        if self.page:
-            self.page.update()
+        if self.dialog and self.page:
+            self.page.close(self.dialog)
         
         # 设置默认账号
         if not self.selected_account:
@@ -642,10 +606,8 @@ class LoginDialog:
         
         # 构建并显示快速登录对话框
         self._build_quick_login_dialog()
-        if self.dialog:
-            self.page.overlay.append(self.dialog)
-            self.dialog.open = True
-            self.page.update()
+        if self.dialog and self.page:
+            self.page.open(self.dialog)
     
     def _on_cancel_click(self, e):
         """取消按钮点击"""
@@ -659,7 +621,5 @@ class LoginDialog:
         self._stop_uin_check()
         self.login_service.stop_sse_listener()
         
-        if self.dialog:
-            self.dialog.open = False
-        if self.page:
-            self.page.update()
+        if self.dialog and self.page:
+            self.page.close(self.dialog)
