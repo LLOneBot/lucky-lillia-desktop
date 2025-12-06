@@ -44,10 +44,11 @@ class LogPage:
         )
 
         # 使用单个 Text 控件显示所有日志，支持多行复制
+        # 日志使用等宽字体，便于对齐阅读
         self.log_text = ft.Text(
             value="暂无日志",
-            size=12,
-            font_family="Consolas",
+            size=13,
+            font_family="Cascadia Code, Consolas, Microsoft YaHei Mono, monospace",
             selectable=True,
             width=float("inf"),  # 最大宽度
         )

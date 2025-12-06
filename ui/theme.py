@@ -82,6 +82,10 @@ DARK_THEME = {
 }
 
 
+# 全局字体配置 - 微软雅黑
+FONT_FAMILY = "Microsoft YaHei"
+
+
 def get_light_theme() -> ft.Theme:
     """获取浅色主题配置
     
@@ -91,6 +95,7 @@ def get_light_theme() -> ft.Theme:
     return ft.Theme(
         color_scheme_seed=LIGHT_THEME["primary"],
         use_material3=True,
+        font_family=FONT_FAMILY,
     )
 
 
@@ -103,6 +108,7 @@ def get_dark_theme() -> ft.Theme:
     return ft.Theme(
         color_scheme_seed=DARK_THEME["primary"],
         use_material3=True,
+        font_family=FONT_FAMILY,
     )
 
 
@@ -118,6 +124,11 @@ def apply_theme(page: ft.Page, theme_mode: str) -> None:
     """
     if theme_mode not in ["light", "dark"]:
         raise ValueError(f"Invalid theme mode: {theme_mode}. Must be 'light' or 'dark'")
+    
+    # 注册系统字体
+    page.fonts = {
+        "Microsoft YaHei": "Microsoft YaHei",
+    }
     
     page.theme = get_light_theme()
     page.dark_theme = get_dark_theme()
