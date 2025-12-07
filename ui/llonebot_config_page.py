@@ -14,6 +14,12 @@ class LLOneBotConfigPage:
         "webui": {"enable": True, "port": 3080},
         "satori": {"enable": False, "port": 5600, "token": ""},
         "ob11": {"enable": True, "connect": []},
+        "milky": {
+            "enable": False,
+            "reportSelfMessage": False,
+            "http": {"port": 3010, "prefix": "", "accessToken": ""},
+            "webhook": {"urls": []}
+        },
         "enableLocalFile2Url": False,
         "log": True,
         "autoDeleteFile": False,
@@ -108,6 +114,24 @@ class LLOneBotConfigPage:
         self.ob11_enable = ft.Checkbox(label="启用 OneBot 11",
             value=self.current_config.get("ob11", {}).get("enable", True))
         
+        # Milky
+        milky_cfg = self.current_config.get("milky", {})
+        self.milky_enable = ft.Checkbox(label="启用",
+            value=milky_cfg.get("enable", False))
+        self.milky_report_self = ft.Checkbox(label="上报自身消息",
+            value=milky_cfg.get("reportSelfMessage", False))
+        self.milky_http_port = ft.TextField(label="HTTP端口", width=120,
+            value=str(milky_cfg.get("http", {}).get("port", 3010)),
+            keyboard_type=ft.KeyboardType.NUMBER)
+        self.milky_http_prefix = ft.TextField(label="前缀", width=150,
+            value=milky_cfg.get("http", {}).get("prefix", ""))
+        self.milky_http_token = ft.TextField(label="AccessToken", width=200,
+            value=milky_cfg.get("http", {}).get("accessToken", ""))
+        # Webhook URLs 动态列表
+        self.milky_webhook_url_controls: List[ft.TextField] = []
+        self.milky_webhook_container = ft.Column(spacing=8)
+        self._rebuild_webhook_urls(milky_cfg.get("webhook", {}).get("urls", []))
+        
         # 连接标签页
         self.connects_tabs = ft.Tabs(selected_index=0, tabs=[], height=320,
                                       on_change=self._on_tab_change)
@@ -172,12 +196,26 @@ class LLOneBotConfigPage:
             self._section("WebUI", ft.Icons.WEB, [
                 ft.Row([self.webui_enable, self.webui_port], spacing=16)
             ]),
-            self._section("Satori", ft.Icons.CLOUD, [
-                ft.Row([self.satori_enable, self.satori_port, self.satori_token], spacing=16)
-            ]),
             self._section("OneBot 11", ft.Icons.SETTINGS_ETHERNET, [
                 ft.Row([self.ob11_enable], spacing=16),
                 self.connects_tabs
+            ]),
+            self._section("Satori", ft.Icons.CLOUD, [
+                ft.Row([self.satori_enable, self.satori_port, self.satori_token], spacing=16)
+            ]),
+            self._section("Milky", ft.Icons.WATER_DROP, [
+                ft.Row([self.milky_enable, self.milky_report_self], spacing=16),
+                ft.Row([self.milky_http_port, self.milky_http_prefix, self.milky_http_token], spacing=16),
+                ft.Container(
+                    content=ft.Column([
+                        ft.Row([
+                            ft.Text("Webhook URLs", size=14, weight=ft.FontWeight.W_500),
+                            ft.IconButton(icon=ft.Icons.ADD_CIRCLE, tooltip="添加URL",
+                                          on_click=self._on_add_webhook_url, icon_size=20),
+                        ], spacing=8),
+                        self.milky_webhook_container,
+                    ], spacing=4),
+                ),
             ]),
             self._section("其他配置", ft.Icons.MORE_HORIZ, [
                 ft.Row([self.enable_local_file2url, self.log_enable,
@@ -322,6 +360,48 @@ class LLOneBotConfigPage:
         """标签切换事件（预留）"""
         pass
     
+    def _rebuild_webhook_urls(self, urls: List[str]):
+        """重建 webhook URL 列表"""
+        self.milky_webhook_url_controls.clear()
+        self.milky_webhook_container.controls.clear()
+        for i, url in enumerate(urls):
+            self._add_webhook_url_row(url, i)
+    
+    def _add_webhook_url_row(self, url: str = "", index: int = -1):
+        """添加一行 webhook URL 输入"""
+        text_field = ft.TextField(value=url, width=350, hint_text="http://example.com/webhook")
+        self.milky_webhook_url_controls.append(text_field)
+        idx = len(self.milky_webhook_url_controls) - 1
+        row = ft.Row([
+            text_field,
+            ft.IconButton(icon=ft.Icons.DELETE, tooltip="删除",
+                          on_click=lambda e, i=idx: self._on_delete_webhook_url(i),
+                          icon_size=18, icon_color=ft.Colors.RED_400),
+        ], spacing=8)
+        self.milky_webhook_container.controls.append(row)
+    
+    def _on_add_webhook_url(self, e):
+        """添加新的 webhook URL"""
+        self._add_webhook_url_row("")
+        self._try_update()
+    
+    def _on_delete_webhook_url(self, index: int):
+        """删除指定索引的 webhook URL"""
+        if 0 <= index < len(self.milky_webhook_url_controls):
+            self.milky_webhook_url_controls.pop(index)
+            self.milky_webhook_container.controls.pop(index)
+            # 更新剩余行的删除按钮索引
+            for i, row in enumerate(self.milky_webhook_container.controls):
+                if isinstance(row, ft.Row) and len(row.controls) > 1:
+                    btn = row.controls[1]
+                    if isinstance(btn, ft.IconButton):
+                        btn.on_click = lambda e, idx=i: self._on_delete_webhook_url(idx)
+            self._try_update()
+    
+    def _collect_webhook_urls(self) -> List[str]:
+        """收集所有 webhook URL"""
+        return [tf.value.strip() for tf in self.milky_webhook_url_controls if tf.value and tf.value.strip()]
+    
     def _add_connect(self, conn_type: str):
         """添加新连接"""
         new_conn = copy.deepcopy(self.DEFAULT_CONNECT.get(conn_type, self.DEFAULT_CONNECT["ws"]))
@@ -389,6 +469,18 @@ class LLOneBotConfigPage:
                            "port": int(self.satori_port.value or 5600),
                            "token": self.satori_token.value or ""},
                 "ob11": {"enable": self.ob11_enable.value, "connect": self._collect_connects()},
+                "milky": {
+                    "enable": self.milky_enable.value,
+                    "reportSelfMessage": self.milky_report_self.value,
+                    "http": {
+                        "port": int(self.milky_http_port.value or 3010),
+                        "prefix": self.milky_http_prefix.value or "",
+                        "accessToken": self.milky_http_token.value or ""
+                    },
+                    "webhook": {
+                        "urls": self._collect_webhook_urls()
+                    }
+                },
                 "enableLocalFile2Url": self.enable_local_file2url.value,
                 "log": self.log_enable.value,
                 "autoDeleteFile": self.auto_delete_file.value,
@@ -416,6 +508,13 @@ class LLOneBotConfigPage:
         self.satori_port.value = str(cfg.get("satori", {}).get("port", 5600))
         self.satori_token.value = cfg.get("satori", {}).get("token", "")
         self.ob11_enable.value = cfg.get("ob11", {}).get("enable", True)
+        milky_cfg = cfg.get("milky", {})
+        self.milky_enable.value = milky_cfg.get("enable", False)
+        self.milky_report_self.value = milky_cfg.get("reportSelfMessage", False)
+        self.milky_http_port.value = str(milky_cfg.get("http", {}).get("port", 3010))
+        self.milky_http_prefix.value = milky_cfg.get("http", {}).get("prefix", "")
+        self.milky_http_token.value = milky_cfg.get("http", {}).get("accessToken", "")
+        self._rebuild_webhook_urls(milky_cfg.get("webhook", {}).get("urls", []))
         self.enable_local_file2url.value = cfg.get("enableLocalFile2Url", False)
         self.log_enable.value = cfg.get("log", True)
         self.auto_delete_file.value = cfg.get("autoDeleteFile", False)
