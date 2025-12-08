@@ -32,6 +32,9 @@ DEFAULT_CONFIG = {
     "headless": False,
     "minimize_to_tray_on_start": False,
     "log_level": "info",
+    # 日志相关配置
+    "log_save_enabled": True,  # 是否保存日志到文件
+    "log_retention_seconds": 86400,   # 日志保存时长（秒），0表示永久保存，默认7天=604800秒
     # UI 相关配置
     "theme_mode": "dark",
     "window_width": 1200.0,

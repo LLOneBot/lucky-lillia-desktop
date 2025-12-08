@@ -114,6 +114,23 @@ class ConfigPage:
             value=self.current_config.get("minimize_to_tray_on_start", False),
         )
         
+        # 日志设置字段
+        self.log_save_enabled_checkbox = ft.Checkbox(
+            label="保存日志到文件",
+            value=self.current_config.get("log_save_enabled", True),
+        )
+        
+        # 配置文件存秒数，UI显示小时数
+        retention_seconds = self.current_config.get("log_retention_seconds", 604800)
+        retention_hours = retention_seconds // 3600 if retention_seconds > 0 else 0
+        self.log_retention_hours_field = ft.TextField(
+            label="日志保存时长（小时）",
+            hint_text="0 表示永久保存",
+            value=str(retention_hours),
+            width=180,
+            keyboard_type=ft.KeyboardType.NUMBER,
+        )
+        
         # 错误提示文本
         self.error_text = ft.Text(
             "",
@@ -158,7 +175,7 @@ class ConfigPage:
                     color=ft.Colors.PRIMARY
                 ),
                 ft.Text(
-                    "配置管理",
+                    "系统配置",
                     size=32,
                     weight=ft.FontWeight.BOLD
                 ),
@@ -181,6 +198,30 @@ class ConfigPage:
                         self.auto_start_bot_checkbox,
                         self.headless_checkbox,
                         self.minimize_to_tray_on_start_checkbox,
+                    ], spacing=16),
+                    padding=24,
+                ),
+                elevation=3,
+                surface_tint_color=ft.Colors.PRIMARY,
+            ),
+            
+            # 日志设置区域
+            ft.Row([
+                ft.Icon(ft.Icons.ARTICLE, size=24, color=ft.Colors.PRIMARY),
+                ft.Text(
+                    "日志设置",
+                    size=22,
+                    weight=ft.FontWeight.W_600
+                ),
+            ], spacing=10),
+            ft.Card(
+                content=ft.Container(
+                    content=ft.Column([
+                        self.log_save_enabled_checkbox,
+                        ft.Row([
+                            self.log_retention_hours_field,
+                            ft.Text("（0 表示永久保存）", size=12, color=ft.Colors.GREY_500),
+                        ], spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER),
                     ], spacing=16),
                     padding=24,
                 ),
@@ -261,40 +302,76 @@ class ConfigPage:
         return self.control
 
     
+    def _get_initial_directory(self, current_path: str) -> str:
+        """获取文件选择器的初始目录
+        
+        Args:
+            current_path: 当前路径值（可能是相对路径或绝对路径）
+            
+        Returns:
+            初始目录的绝对路径
+        """
+        import os
+        if not current_path:
+            return os.getcwd()
+        
+        # 将路径转换为绝对路径
+        path = Path(current_path)
+        if not path.is_absolute():
+            path = Path(os.getcwd()) / path
+        
+        # 如果是文件路径，返回其父目录
+        if path.is_file():
+            return str(path.parent)
+        elif path.is_dir():
+            return str(path)
+        elif path.parent.exists():
+            return str(path.parent)
+        else:
+            return os.getcwd()
+    
     def _on_select_qq_path(self, e):
         """QQ路径选择按钮点击处理"""
         self._current_field = "qq_path"
+        initial_dir = self._get_initial_directory(self.qq_path_field.value)
         self.file_picker.pick_files(
             dialog_title="选择QQ可执行文件",
             allowed_extensions=["exe"],
-            allow_multiple=False
+            allow_multiple=False,
+            initial_directory=initial_dir
         )
     
     def _on_select_pmhq_path(self, e):
         """PMHQ路径选择按钮点击处理"""
         self._current_field = "pmhq_path"
+        initial_dir = self._get_initial_directory(self.pmhq_path_field.value)
         self.file_picker.pick_files(
             dialog_title="选择PMHQ可执行文件",
             allowed_extensions=["exe"],
-            allow_multiple=False
+            allow_multiple=False,
+            initial_directory=initial_dir
         )
     
     def _on_select_llonebot_path(self, e):
         """LLOneBot路径选择按钮点击处理"""
         self._current_field = "llonebot_path"
+        initial_dir = self._get_initial_directory(self.llonebot_path_field.value)
         self.file_picker.pick_files(
             dialog_title="选择LLOneBot脚本文件",
             allowed_extensions=["js"],
-            allow_multiple=False
+            allow_multiple=False,
+            initial_directory=initial_dir
         )
     
     def _on_select_node_path(self, e):
         """Node.js路径选择按钮点击处理"""
         self._current_field = "node_path"
+        initial_dir = self._get_initial_directory(self.node_path_field.value)
         self.file_picker.pick_files(
             dialog_title="选择Node.js可执行文件",
             allowed_extensions=["exe"],
-            allow_multiple=False
+            allow_multiple=False,
+            initial_directory=initial_dir
         )
     
     def _on_file_picker_result(self, e: ft.FilePickerResultEvent):
@@ -342,6 +419,11 @@ class ConfigPage:
             config["auto_start_bot"] = self.auto_start_bot_checkbox.value
             config["headless"] = self.headless_checkbox.value
             config["minimize_to_tray_on_start"] = self.minimize_to_tray_on_start_checkbox.value
+            config["log_save_enabled"] = self.log_save_enabled_checkbox.value
+            # 解析日志保存时长（UI输入小时，保存为秒）
+            retention_hours_str = self.log_retention_hours_field.value.strip()
+            retention_hours = int(retention_hours_str) if retention_hours_str else 168
+            config["log_retention_seconds"] = retention_hours * 3600
         except ValueError:
             self._show_error("配置数据无效")
             return
@@ -358,11 +440,25 @@ class ConfigPage:
             self.current_config = config
             self._show_success("配置保存成功")
             
+            # 触发日志清理（如果保存天数有变化）
+            self._trigger_log_cleanup()
+            
             # 调用回调函数
             if self.on_config_saved:
                 self.on_config_saved(config)
         else:
             self._show_error("配置保存失败，请检查文件权限")
+    
+    def _trigger_log_cleanup(self):
+        """触发日志清理"""
+        try:
+            from main import LogCleaner
+            log_cleaner = LogCleaner()
+            # 在后台线程中执行清理，避免阻塞UI
+            import threading
+            threading.Thread(target=log_cleaner.cleanup_now, daemon=True).start()
+        except Exception:
+            pass  # 忽略清理失败
     
     def _show_error(self, message: str):
         """显示错误提示
@@ -406,6 +502,11 @@ class ConfigPage:
             self.auto_start_bot_checkbox.value = self.current_config.get("auto_start_bot", False)
             self.headless_checkbox.value = self.current_config.get("headless", False)
             self.minimize_to_tray_on_start_checkbox.value = self.current_config.get("minimize_to_tray_on_start", False)
+            self.log_save_enabled_checkbox.value = self.current_config.get("log_save_enabled", True)
+            # 秒转小时显示
+            retention_seconds = self.current_config.get("log_retention_seconds", 604800)
+            retention_hours = retention_seconds // 3600 if retention_seconds > 0 else 0
+            self.log_retention_hours_field.value = str(retention_hours)
             
             # 隐藏提示
             self.error_text.visible = False

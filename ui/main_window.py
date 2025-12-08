@@ -168,7 +168,7 @@ class MainWindow:
                 ft.NavigationRailDestination(
                     icon=ft.Icons.SETTINGS_OUTLINED,
                     selected_icon=ft.Icons.SETTINGS,
-                    label="启动配置",
+                    label="系统配置",
                     padding=ft.padding.symmetric(vertical=8)
                 ),
                 ft.NavigationRailDestination(
