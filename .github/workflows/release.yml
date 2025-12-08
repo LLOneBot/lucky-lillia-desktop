@@ -49,7 +49,7 @@ jobs:
           mkdir package
           copy dist\lucky-lillia-desktop.exe package\
           copy package.json package\
-          tar -czf luck-lilia-desktop-win-x64.tgz package
+          tar -czf lucky-lilia-desktop-win-x64.tgz package
 
       - name: Publish to npm
-        run: npm publish luck-lilia-desktop-win-x64.tgz --access public
+        run: npm publish lucky-lilia-desktop-win-x64.tgz --access public
