@@ -52,4 +52,4 @@ jobs:
           tar -czf lucky-lilia-desktop-win-x64.tgz package
 
       - name: Publish to npm
-        run: npm publish lucky-lilia-desktop-win-x64.tgz --access public
+        run: npm publish lucky-lilia-desktop-win-x64.tgz --access public --provenance
