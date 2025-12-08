@@ -40,6 +40,7 @@ jobs:
         with:
           name: Lucky-Lillia-Desktop ${{ github.ref_name }}
           generate_release_notes: true
+          draft: true
           files: dist/lucky-lillia-desktop.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -49,7 +50,7 @@ jobs:
           mkdir package
           copy dist\lucky-lillia-desktop.exe package\
           copy package.json package\
-          tar -czf lucky-lilia-desktop-win-x64.tgz package
+          tar -czf lucky-lillia-desktop-win-x64.tgz package
 
       - name: Publish to npm
-        run: npm publish lucky-lilia-desktop-win-x64.tgz --access public --provenance
+        run: npm publish lucky-lillia-desktop-win-x64.tgz
