@@ -35,13 +35,16 @@ jobs:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
 
+      - name: Compress exe to zip
+        run: Compress-Archive -Path dist/lucky-lillia-desktop.exe -DestinationPath dist/lucky-lillia-desktop-win-x64.zip
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: Lucky-Lillia-Desktop ${{ github.ref_name }}
           generate_release_notes: true
           draft: true
-          files: dist/lucky-lillia-desktop.exe
+          files: dist/lucky-lillia-desktop-win-x64.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -53,4 +56,4 @@ jobs:
           tar -czf lucky-lillia-desktop-win-x64.tgz package
 
       - name: Publish to npm
-        run: npm publish lucky-lillia-desktop-win-x64.tgz
+        run: npm publish lucky-lillia-desktop-win-x64.tgz --provenance
