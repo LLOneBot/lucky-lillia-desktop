@@ -27,7 +27,10 @@ jobs:
           pip install -r requirements.txt
 
       - name: Build exe
-        run: pyinstaller lucky-lillia-desktop.spec
+        run: |
+          pyinstaller lucky-lillia-desktop.spec
+          dir dist
+          (Get-Item dist/lucky-lillia-desktop.exe).Length / 1MB
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

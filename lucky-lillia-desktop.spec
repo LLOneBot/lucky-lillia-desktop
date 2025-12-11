@@ -32,7 +32,7 @@ a = Analysis(
         'win32api',
         'winpty',
     ],
-    hookspath=[],
+    hookspath=['hooks'],
     hooksconfig={},
     runtime_hooks=[],
     excludes=[
