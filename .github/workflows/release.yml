@@ -38,6 +38,9 @@ jobs:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
 
+      - name: Update npm
+        run: npm install -g npm@latest
+
       - name: Compress exe to zip
         run: Compress-Archive -Path dist/lucky-lillia-desktop.exe -DestinationPath dist/lucky-lillia-desktop-win-x64.zip
 
@@ -58,5 +61,12 @@ jobs:
           copy package.json package\
           tar -czf lucky-lillia-desktop-win-x64.tgz package
 
+      - name: Update npm package version
+        run: |
+          cd package
+          npm version ${{ github.ref_name }} --no-git-tag-version --allow-same-version
+          cd ..
+          tar -czf lucky-lillia-desktop-win-x64.tgz package
+
       - name: Publish to npm
-        run: npm publish lucky-lillia-desktop-win-x64.tgz --provenance
+        run: npm publish lucky-lillia-desktop-win-x64.tgz --provenance --access public

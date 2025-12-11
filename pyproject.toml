@@ -4,11 +4,12 @@ version = "1.0.0"
 description = "幸运莉莉娅，管理 PMHQ 和 LLBot 的桌面客户端"
 requires-python = ">=3.9"
 dependencies = [
-    "flet>=0.21.0",
+    "flet>=0.28.3",
     "psutil>=5.9.0",
     "packaging>=23.0",
     "pystray>=0.19.0",
     "pillow>=10.0.0",
+    "PyInstaller",
 ]
 
 [project.optional-dependencies]

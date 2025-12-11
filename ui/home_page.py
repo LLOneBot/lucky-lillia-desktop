@@ -270,22 +270,39 @@ class LogPreviewCard:
         self.on_view_all_callback = on_view_all
         self.log_entries = []
         self.control = None
+        self._last_log_hash = None  # 用于检测日志是否变化
         
     def build(self):
         """构建UI组件"""
+        # 预创建10个日志行控件，避免频繁创建/销毁导致 Flutter 内存泄漏
+        self._log_rows = []
+        for _ in range(10):
+            icon = ft.Icon(ft.Icons.INFO_OUTLINE, size=14, color=ft.Colors.BLUE_600)
+            text = ft.Text(
+                "",
+                size=13,
+                color=ft.Colors.ON_SURFACE,
+                max_lines=2,
+                overflow=ft.TextOverflow.ELLIPSIS,
+                expand=True
+            )
+            row = ft.Row([icon, text], spacing=6, vertical_alignment=ft.CrossAxisAlignment.START, visible=False)
+            self._log_rows.append((row, icon, text))
+        
+        self._empty_text = ft.Text(
+            "暂无日志",
+            size=14,
+            color=ft.Colors.GREY_600,
+            italic=True
+        )
+        self._empty_container = ft.Container(
+            content=self._empty_text,
+            expand=True,
+            alignment=ft.alignment.center,
+        )
+        
         self.log_list = ft.Column(
-            controls=[
-                ft.Container(
-                    content=ft.Text(
-                        "暂无日志",
-                        size=14,
-                        color=ft.Colors.GREY_600,
-                        italic=True
-                    ),
-                    expand=True,
-                    alignment=ft.alignment.center,
-                )
-            ],
+            controls=[self._empty_container] + [row for row, _, _ in self._log_rows],
             spacing=6,
             scroll=ft.ScrollMode.AUTO,
             expand=True,
@@ -343,52 +360,59 @@ class LogPreviewCard:
         Args:
             log_entries: 日志条目列表，每个条目包含timestamp, process_name, level, message
         """
-        self.log_entries = log_entries[-10:]  # 只显示最新10条
+        entries = log_entries[-10:]  # 只显示最新10条
+        
+        # 计算日志哈希，只在内容变化时才更新UI
+        if entries:
+            # 使用最后一条日志的时间戳和消息作为哈希
+            last_entry = entries[-1]
+            current_hash = (
+                len(entries),
+                last_entry.get("timestamp", ""),
+                last_entry.get("message", "")[:50]  # 只取前50字符
+            )
+        else:
+            current_hash = (0, "", "")
+        
+        # 如果内容没变化，跳过更新
+        if current_hash == self._last_log_hash:
+            return
+        
+        self._last_log_hash = current_hash
+        self.log_entries = entries
         
         if not self.log_entries:
-            self.log_list.controls = [
-                ft.Container(
-                    content=ft.Text(
-                        "暂无日志",
-                        size=14,
-                        color=ft.Colors.GREY_600,
-                        italic=True
-                    ),
-                    expand=True,
-                    alignment=ft.alignment.center,
-                )
-            ]
+            # 显示空状态，隐藏所有日志行
+            self._empty_container.visible = True
+            for row, _, _ in self._log_rows:
+                row.visible = False
         else:
-            self.log_list.controls = []
-            for entry in self.log_entries:
-                timestamp = entry.get("timestamp", "")
-                process_name = entry.get("process_name", "")
-                level = entry.get("level", "stdout")
-                message = entry.get("message", "")
-                
-                # 根据日志级别设置颜色和图标
-                if level == "stderr":
-                    color = ft.Colors.RED_700
-                    icon = ft.Icons.ERROR_OUTLINE
-                    icon_color = ft.Colors.RED_600
+            # 隐藏空状态
+            self._empty_container.visible = False
+            
+            # 更新预创建的控件，而不是创建新控件
+            for i, (row, icon_ctrl, text_ctrl) in enumerate(self._log_rows):
+                if i < len(self.log_entries):
+                    entry = self.log_entries[i]
+                    timestamp = entry.get("timestamp", "")
+                    process_name = entry.get("process_name", "")
+                    level = entry.get("level", "stdout")
+                    message = entry.get("message", "")
+                    
+                    # 根据日志级别设置颜色和图标
+                    if level == "stderr":
+                        text_ctrl.color = ft.Colors.RED_700
+                        icon_ctrl.name = ft.Icons.ERROR_OUTLINE
+                        icon_ctrl.color = ft.Colors.RED_600
+                    else:
+                        text_ctrl.color = ft.Colors.ON_SURFACE
+                        icon_ctrl.name = ft.Icons.INFO_OUTLINE
+                        icon_ctrl.color = ft.Colors.BLUE_600
+                    
+                    text_ctrl.value = f"[{timestamp}] [{process_name}] {message}"
+                    row.visible = True
                 else:
-                    color = ft.Colors.ON_SURFACE
-                    icon = ft.Icons.INFO_OUTLINE
-                    icon_color = ft.Colors.BLUE_600
-                
-                log_text = ft.Row([
-                    ft.Icon(icon, size=14, color=icon_color),
-                    ft.Text(
-                        f"[{timestamp}] [{process_name}] {message}",
-                        size=13,
-                        color=color,
-                        max_lines=2,
-                        overflow=ft.TextOverflow.ELLIPSIS,
-                        expand=True
-                    )
-                ], spacing=6, vertical_alignment=ft.CrossAxisAlignment.START)
-                
-                self.log_list.controls.append(log_text)
+                    row.visible = False
             
             # 自动滚动到最新日志
             self.log_list.scroll_to(offset=-1, duration=100)
@@ -439,14 +463,14 @@ class HomePage:
         # 日志实时更新相关
         self._log_update_scheduled = False
         self._log_update_lock = __import__('threading').Lock()
+        self._log_update_pending = False  # 是否有待处理的日志更新
         
         # 进程对象缓存（用于正确计算CPU使用率）
         # cpu_percent(interval=0) 需要在同一个Process对象上多次调用才能返回正确值
         self._process_cache = {}  # {pid: psutil.Process}
         
-        # 注册日志回调
-        if self.log_collector:
-            self.log_collector.add_callback(self._on_new_log)
+        # 不再使用回调方式更新日志，改为由资源监控线程统一处理
+        # 这样可以避免频繁创建线程导致的内存泄漏
         
     def build(self):
         """构建UI组件"""
@@ -867,12 +891,8 @@ class HomePage:
                 message="正在启动..."
             )
             self.log_collector._logs.append(entry)
-            # 触发回调更新UI
-            for callback in self.log_collector._callbacks:
-                try:
-                    callback(entry)
-                except Exception:
-                    pass
+            # 立即刷新日志预览
+            self._refresh_log_preview()
         
         # 获取配置
         try:
@@ -2220,45 +2240,34 @@ class HomePage:
         """
         self.log_card.update_logs(log_entries)
     
+    def _refresh_log_preview(self):
+        """立即刷新日志预览"""
+        if self.log_collector:
+            logs = self.log_collector.get_recent_logs(10)
+            log_entries = [
+                {
+                    "timestamp": log.timestamp.strftime("%H:%M:%S"),
+                    "process_name": log.process_name,
+                    "level": log.level,
+                    "message": log.message,
+                }
+                for log in logs
+            ]
+            self.log_card.update_logs(log_entries)
+            if self.page:
+                self.page.update()
+    
     def _on_new_log(self, entry):
-        """新日志回调 - 实时更新首页日志预览
+        """新日志回调 - 已废弃，日志更新由资源监控线程统一处理
+        
+        保留此方法是为了兼容性，但不再执行任何操作。
         
         Args:
             entry: LogEntry对象
         """
-        import threading
-        
-        with self._log_update_lock:
-            if self._log_update_scheduled:
-                return
-            self._log_update_scheduled = True
-        
-        # 延迟100ms批量更新，避免频繁刷新
-        def update_logs():
-            import time
-            time.sleep(0.1)
-            
-            with self._log_update_lock:
-                self._log_update_scheduled = False
-            
-            # 只在首页时更新
-            if self.page and self.log_collector:
-                try:
-                    logs = self.log_collector.get_logs()
-                    log_entries = []
-                    for log in logs[-10:]:  # 只取最新10条
-                        log_entries.append({
-                            "timestamp": log.timestamp.strftime("%H:%M:%S"),
-                            "process_name": log.process_name,
-                            "level": log.level,
-                            "message": log.message
-                        })
-                    self.log_card.update_logs(log_entries)
-                    self.page.update()
-                except Exception:
-                    pass
-        
-        threading.Thread(target=update_logs, daemon=True).start()
+        # 不再使用回调方式更新日志，避免频繁创建线程导致的内存泄漏
+        # 日志更新已由 main_window.py 中的资源监控线程统一处理
+        pass
     
     def clear_update_banner(self, component: str = None):
         """清除更新横幅

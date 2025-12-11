@@ -879,16 +879,17 @@ class MainWindow:
                 if self.current_page_index == 0 and self.page:
                     self.home_page.refresh_process_resources()
                     
-                    # 更新日志预览
-                    logs = self.log_collector.get_logs()
-                    log_entries = []
-                    for log in logs[-10:]:  # 只取最新10条
-                        log_entries.append({
+                    # 更新日志预览（只获取最新10条，避免创建完整副本）
+                    logs = self.log_collector.get_recent_logs(10)
+                    log_entries = [
+                        {
                             "timestamp": log.timestamp.strftime("%H:%M:%S"),
                             "process_name": log.process_name,
                             "level": log.level,
-                            "message": log.message
-                        })
+                            "message": log.message,
+                        }
+                        for log in logs
+                    ]
                     self.home_page.refresh_logs(log_entries)
                     
                     # 更新UI

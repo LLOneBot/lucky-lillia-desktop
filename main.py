@@ -38,6 +38,7 @@ from ui.main_window import MainWindow
 from __version__ import __version__
 
 
+
 # 获取应用程序所在目录
 def get_app_dir() -> Path:
     """获取应用程序所在目录"""

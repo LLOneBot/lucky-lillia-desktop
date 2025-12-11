@@ -190,6 +190,32 @@ class LogCollector:
             else:
                 return [entry for entry in self._logs if entry.process_name == process_name]
     
+    def get_log_count(self) -> int:
+        """获取日志条目数量（不创建副本）
+        
+        Returns:
+            日志条目数量
+        """
+        with self._lock:
+            return len(self._logs)
+    
+    def get_recent_logs(self, count: int) -> List[LogEntry]:
+        """获取最近的N条日志（避免创建完整副本）
+        
+        Args:
+            count: 要获取的日志数量
+            
+        Returns:
+            最近的日志条目列表
+        """
+        with self._lock:
+            if count >= len(self._logs):
+                return list(self._logs)
+            # 使用 itertools.islice 从 deque 末尾取数据更高效
+            from itertools import islice
+            start_idx = len(self._logs) - count
+            return list(islice(self._logs, start_idx, None))
+    
     def clear_logs(self, process_name: Optional[str] = None) -> None:
         """清空日志
         
