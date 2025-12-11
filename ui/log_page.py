@@ -12,7 +12,7 @@ class LogPage:
     """日志页面组件 - 自动刷新模式"""
 
     MAX_DISPLAY = 500
-    AUTO_REFRESH_INTERVAL = 0.5  # 自动刷新间隔（秒）
+    AUTO_REFRESH_INTERVAL = 1.0  # 自动刷新间隔（秒），增加间隔减少CPU占用
 
     def __init__(self, log_collector: LogCollector):
         """初始化日志页面"""
@@ -23,6 +23,8 @@ class LogPage:
         self._auto_refresh_enabled = True  # 自动刷新开关状态
         self._auto_refresh_thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()  # 用于停止自动刷新线程
+        self._update_lock = threading.Lock()  # 防止并发更新UI
+        self._last_log_count = 0  # 上次日志数量，用于检测变化
 
     def build(self):
         """构建UI组件"""
@@ -130,29 +132,55 @@ class LogPage:
             except Exception:
                 pass
 
-    def _load_logs(self):
-        """加载日志"""
-        logs = self.log_collector.get_logs()
+    def _load_logs(self, force: bool = False):
+        """加载日志
+        
+        Args:
+            force: 是否强制刷新，忽略日志数量检查
+        """
+        # 防止并发更新
+        if not self._update_lock.acquire(blocking=False):
+            return
+        
+        try:
+            # 检查页面是否仍然可见
+            if not self._is_page_visible:
+                return
+            
+            # 直接获取日志的deque引用，避免创建完整副本
+            logs = self.log_collector.get_logs()
+            log_count = len(logs)
+            
+            # 如果日志数量没变化且不是强制刷新，跳过更新
+            if not force and log_count == self._last_log_count:
+                return
+            
+            self._last_log_count = log_count
 
-        if not logs:
-            text = "暂无日志"
-        else:
-            # 正序显示（旧的在上，新的在下）
-            recent_logs = list(logs)[-self.MAX_DISPLAY:]
-            lines = [self._format_log_entry(entry) for entry in recent_logs]
-            text = "\n".join(lines)
+            if not logs:
+                text = "暂无日志"
+            else:
+                # 只取最后MAX_DISPLAY条，使用切片避免创建完整副本
+                start_idx = max(0, log_count - self.MAX_DISPLAY)
+                lines = []
+                for i, entry in enumerate(logs):
+                    if i >= start_idx:
+                        lines.append(self._format_log_entry(entry))
+                text = "\n".join(lines)
 
-        if self.log_text:
-            self.log_text.value = text
-            self.log_text.color = ft.Colors.GREY_600 if not logs else ft.Colors.ON_SURFACE
-            try:
-                if self.control and self.control.page:
-                    self.control.page.update()
-                    # 开启自动刷新时，滚动到底部
-                    if self._auto_refresh_enabled and self.log_column:
-                        self.log_column.scroll_to(offset=-1, duration=0)
-            except Exception as e:
-                print(f"日志更新失败: {e}")
+            if self.log_text and self._is_page_visible:
+                self.log_text.value = text
+                self.log_text.color = ft.Colors.GREY_600 if not logs else ft.Colors.ON_SURFACE
+                try:
+                    if self.control and self.control.page and self._is_page_visible:
+                        self.control.page.update()
+                        # 开启自动刷新时，滚动到底部
+                        if self._auto_refresh_enabled and self.log_column and self._is_page_visible:
+                            self.log_column.scroll_to(offset=-1, duration=0)
+                except Exception:
+                    pass  # 静默处理更新失败
+        finally:
+            self._update_lock.release()
 
     def _auto_refresh_loop(self):
         """自动刷新循环"""
@@ -162,7 +190,10 @@ class LogPage:
                 break
             # 只有页面可见且开启自动刷新时才更新
             if self._is_page_visible and self._auto_refresh_enabled:
-                self._load_logs()
+                try:
+                    self._load_logs()
+                except Exception:
+                    pass  # 静默处理刷新错误，避免线程崩溃
 
     def _start_auto_refresh(self):
         """启动自动刷新线程"""
@@ -181,14 +212,18 @@ class LogPage:
 
     def refresh(self):
         """刷新页面"""
-        self._load_logs()
+        self._load_logs(force=True)
 
     def on_page_enter(self):
         """进入页面"""
         self._is_page_visible = True
-        self._load_logs()
+        self._last_log_count = 0  # 重置计数，确保进入时刷新
+        self._load_logs(force=True)
         self._start_auto_refresh()
 
     def on_page_leave(self):
         """离开页面"""
         self._is_page_visible = False
+        # 等待任何正在进行的更新完成
+        self._update_lock.acquire()
+        self._update_lock.release()
