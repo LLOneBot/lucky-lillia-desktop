@@ -75,5 +75,5 @@ jobs:
           cd ..
           tar -czf lucky-lillia-desktop-win-x64.tgz package
 
-      # - name: Publish to npm
-        # run: npm publish lucky-lillia-desktop-win-x64.tgz --provenance --access public
+      - name: Publish to npm
+        run: npm publish lucky-lillia-desktop-win-x64.tgz --provenance --access public
