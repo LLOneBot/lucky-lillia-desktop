@@ -59,7 +59,7 @@ jobs:
           draft: true
           files: dist/lucky-lillia-desktop-win-x64.zip
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
 
       - name: Prepare npm package
         run: |
