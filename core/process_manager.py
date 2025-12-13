@@ -66,7 +66,7 @@ class ProcessManager:
         Args:
             pmhq_path: pmhq.exe的路径
             config_path: pmhq_config.json的路径
-            qq_path: QQ可执行文件的路径（可选）
+            qq_path: QQ可执行文件的路径（可选，会写入PMHQ目录的pmhq_config.json）
             auto_login_qq: 自动登录的QQ号（可选）
             headless: 是否启用无头模式（可选）
             
@@ -96,6 +96,10 @@ class ProcessManager:
             logger.info(f"配置文件绝对路径: {abs_config_path}")
             logger.info(f"工作目录: {working_dir}")
             
+            # 如果指定了QQ路径，写入PMHQ目录的pmhq_config.json（避免命令行编码问题）
+            if qq_path and os.path.isfile(qq_path):
+                self._update_pmhq_config_qq_path(working_dir, qq_path)
+            
             try:
                 self._status["pmhq"] = ProcessStatus.STARTING
                 
@@ -105,9 +109,6 @@ class ProcessManager:
                 
                 # 启动进程，添加 --port 参数
                 cmd = [abs_pmhq_path, f"--port={self._pmhq_port}"]
-                # 如果指定了QQ路径，添加 --qq-path 参数
-                if qq_path and os.path.isfile(qq_path):
-                    cmd.append(f"--qq-path={qq_path}")
                 # 如果指定了自动登录QQ号，添加 --qq 参数
                 if auto_login_qq:
                     cmd.append(f"--qq={auto_login_qq}")
@@ -190,6 +191,46 @@ class ProcessManager:
                 self._status["pmhq"] = ProcessStatus.ERROR
                 return False
     
+    def _update_pmhq_config_qq_path(self, pmhq_dir: str, qq_path: str) -> bool:
+        """更新PMHQ目录下pmhq_config.json中的qq_path
+        
+        通过直接修改配置文件来传递QQ路径，避免命令行参数的编码问题
+        
+        Args:
+            pmhq_dir: PMHQ所在目录
+            qq_path: QQ可执行文件的绝对路径
+            
+        Returns:
+            更新成功返回True，失败返回False
+        """
+        config_file = os.path.join(pmhq_dir, "pmhq_config.json")
+        abs_qq_path = os.path.abspath(qq_path)
+        
+        try:
+            # 读取现有配置（如果存在）
+            config = {}
+            if os.path.isfile(config_file):
+                try:
+                    with open(config_file, 'r', encoding='utf-8') as f:
+                        config = json.load(f)
+                except (json.JSONDecodeError, IOError) as e:
+                    logger.warning(f"读取pmhq_config.json失败，将创建新文件: {e}")
+                    config = {}
+            
+            # 更新qq_path
+            config["qq_path"] = abs_qq_path
+            
+            # 写入配置文件
+            with open(config_file, 'w', encoding='utf-8') as f:
+                json.dump(config, f, indent=2, ensure_ascii=False)
+            
+            logger.info(f"已更新PMHQ配置文件qq_path: {abs_qq_path}")
+            return True
+            
+        except IOError as e:
+            logger.error(f"更新pmhq_config.json失败: {e}")
+            return False
+    
     def _start_pmhq_with_pty(self, pmhq_path: str, cmd_args: list, working_dir: str) -> bool:
         """使用伪终端启动PMHQ（可以实时获取输出）
         
@@ -251,7 +292,7 @@ class ProcessManager:
         Args:
             pmhq_path: PMHQ可执行文件的绝对路径
             working_dir: 工作目录
-            qq_path: QQ可执行文件的路径（可选）
+            qq_path: QQ可执行文件的路径（可选，已通过pmhq_config.json传递）
             auto_login_qq: 自动登录的QQ号（可选）
             headless: 是否启用无头模式（可选）
             
@@ -266,10 +307,8 @@ class ProcessManager:
                 self._pmhq_port = get_available_port(init_port=13000)
                 logger.info(f"PMHQ使用端口: {self._pmhq_port}")
             
-            # 构建参数字符串
+            # 构建参数字符串（qq_path已通过pmhq_config.json传递，避免命令行编码问题）
             params = f"--port={self._pmhq_port}"
-            if qq_path and os.path.isfile(qq_path):
-                params += f' --qq-path="{qq_path}"'
             if auto_login_qq:
                 params += f' --qq={auto_login_qq}'
             if headless:
