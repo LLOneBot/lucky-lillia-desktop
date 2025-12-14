@@ -409,7 +409,11 @@ class LogPreviewCard:
                         icon_ctrl.name = ft.Icons.INFO_OUTLINE
                         icon_ctrl.color = ft.Colors.BLUE_600
                     
-                    text_ctrl.value = f"[{timestamp}] [{process_name}] {message}"
+                    # LLOneBot 日志已包含时间戳，只显示原始消息
+                    if process_name == "LLOneBot":
+                        text_ctrl.value = message
+                    else:
+                        text_ctrl.value = f"[{timestamp}] [{process_name}] {message}"
                     row.visible = True
                 else:
                     row.visible = False

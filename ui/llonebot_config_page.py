@@ -100,6 +100,11 @@ class LLOneBotConfigPage:
         self.webui_port = ft.TextField(label="端口", width=120,
             value=str(self.current_config.get("webui", {}).get("port", 3080)),
             keyboard_type=ft.KeyboardType.NUMBER)
+        self.webui_open_btn = ft.IconButton(
+            icon=ft.Icons.OPEN_IN_BROWSER,
+            tooltip="在浏览器中打开WebUI",
+            on_click=self._on_open_webui
+        )
         
         # Satori
         self.satori_enable = ft.Checkbox(label="启用",
@@ -194,7 +199,7 @@ class LLOneBotConfigPage:
         # 配置内容区域
         self.config_content = ft.Column([
             self._section("WebUI", ft.Icons.WEB, [
-                ft.Row([self.webui_enable, self.webui_port], spacing=16)
+                ft.Row([self.webui_enable, self.webui_port, self.webui_open_btn], spacing=16)
             ]),
             self._section("OneBot 11", ft.Icons.SETTINGS_ETHERNET, [
                 ft.Row([self.ob11_enable], spacing=16),
@@ -359,6 +364,12 @@ class LLOneBotConfigPage:
     def _on_tab_change(self, e):
         """标签切换事件（预留）"""
         pass
+    
+    def _on_open_webui(self, e):
+        """在浏览器中打开WebUI"""
+        import webbrowser
+        port = self.webui_port.value or "3080"
+        webbrowser.open(f"http://localhost:{port}")
     
     def _rebuild_webhook_urls(self, urls: List[str]):
         """重建 webhook URL 列表"""
