@@ -24,7 +24,7 @@ if exist build rmdir /s /q build
 if exist dist rmdir /s /q dist
 
 echo [2/3] 开始打包应用...
-pyinstaller lucky-lillia-desktop.spec
+uv run pyinstaller lucky-lillia-desktop.spec
 
 if errorlevel 1 (
     echo.
@@ -35,7 +35,6 @@ if errorlevel 1 (
 
 echo [3/3] 打包完成！
 echo.
-echo 可执行文件位置: dist\幸运莉莉娅.exe
 echo.
 echo ========================================
 echo 打包成功完成！
