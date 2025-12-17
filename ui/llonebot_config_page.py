@@ -282,7 +282,7 @@ class LLOneBotConfigPage:
         # 添加每个连接的标签
         for i, conn in enumerate(connects):
             conn_type = conn.get("type", "ws")
-            tab_name = f"{self.TYPE_NAMES.get(conn_type, conn_type)} #{i+1}"
+            tab_name = self.TYPE_NAMES.get(conn_type, conn_type)
             controls = self._build_connect_controls(conn, i)
             self.connect_controls.append(controls)
             
