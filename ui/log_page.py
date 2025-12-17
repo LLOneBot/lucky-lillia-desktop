@@ -96,20 +96,20 @@ class LogPage:
         self._empty_container = ft.Container(
             content=self._empty_text,
             alignment=ft.alignment.center,
-            expand=True,
+            padding=20,
             visible=True,
         )
 
         # 日志列表
-        self.log_column = ft.Column(
+        self.log_list = ft.Column(
             controls=[self._empty_container] + [container for container, _, _ in self._log_rows],
             spacing=2,
-            scroll=ft.ScrollMode.AUTO,
             expand=True,
+            scroll=ft.ScrollMode.AUTO,
         )
 
         self.log_container = ft.Container(
-            content=self.log_column,
+            content=self.log_list,
             expand=True,
             bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.PRIMARY),
             border_radius=12,
@@ -263,7 +263,7 @@ class LogPage:
             text.value = ""
         try:
             if self.control and self.control.page:
-                self.log_column.update()
+                self.log_list.update()
         except Exception:
             pass
 
@@ -286,7 +286,7 @@ class LogPage:
                         container.visible = False
                     try:
                         if self.control and self.control.page and self._is_page_visible:
-                            self.log_column.update()
+                            self.log_list.update()
                     except Exception:
                         pass
                 return
@@ -321,9 +321,9 @@ class LogPage:
 
             try:
                 if self.control and self.control.page and self._is_page_visible:
-                    self.log_column.update()
+                    self.log_list.update()
                     if self._auto_refresh_enabled:
-                        self.log_column.scroll_to(offset=-1, duration=0)
+                        self.log_list.scroll_to(offset=-1, duration=0)
             except Exception:
                 pass
 

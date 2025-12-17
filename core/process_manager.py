@@ -125,10 +125,9 @@ class ProcessManager:
                 # 设置环境变量，禁用 Python 子进程的输出缓冲
                 env = os.environ.copy()
                 env['PYTHONUNBUFFERED'] = '1'
-                
-                # Windows 中文系统使用 GBK 编码
-                import locale
-                system_encoding = locale.getpreferredencoding(False)
+                env['PYTHONUTF8'] = '1'
+                # 强制使用 UTF-8 编码，避免 cp932 等编码无法处理中文字符的问题
+                env['PYTHONIOENCODING'] = 'utf-8'
                 
                 process = subprocess.Popen(
                     cmd,
@@ -140,7 +139,7 @@ class ProcessManager:
                     cwd=working_dir,
                     creationflags=creation_flags,
                     env=env,
-                    encoding=system_encoding,
+                    encoding='utf-8',
                     errors='replace'
                 )
                 
