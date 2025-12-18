@@ -1,4 +1,4 @@
-"""主题配置模块 - 定义Material Design主题"""
+"""主题配置模块"""
 
 import flet as ft
 from typing import Dict, Any
@@ -87,11 +87,6 @@ FONT_FAMILY = "Microsoft YaHei"
 
 
 def get_light_theme() -> ft.Theme:
-    """获取浅色主题配置
-    
-    Returns:
-        Flet Theme对象，配置为Material Design 3浅色主题
-    """
     return ft.Theme(
         color_scheme_seed=LIGHT_THEME["primary"],
         use_material3=True,
@@ -100,11 +95,6 @@ def get_light_theme() -> ft.Theme:
 
 
 def get_dark_theme() -> ft.Theme:
-    """获取深色主题配置
-    
-    Returns:
-        Flet Theme对象，配置为Material Design 3深色主题
-    """
     return ft.Theme(
         color_scheme_seed=DARK_THEME["primary"],
         use_material3=True,
@@ -113,15 +103,6 @@ def get_dark_theme() -> ft.Theme:
 
 
 def apply_theme(page: ft.Page, theme_mode: str) -> None:
-    """应用主题到页面
-    
-    Args:
-        page: Flet页面对象
-        theme_mode: 主题模式，"light"或"dark"
-        
-    Raises:
-        ValueError: 如果theme_mode不是"light"或"dark"
-    """
     if theme_mode not in ["light", "dark"]:
         raise ValueError(f"Invalid theme mode: {theme_mode}. Must be 'light' or 'dark'")
     
@@ -137,14 +118,6 @@ def apply_theme(page: ft.Page, theme_mode: str) -> None:
 
 
 def toggle_theme(page: ft.Page) -> str:
-    """切换页面主题
-    
-    Args:
-        page: Flet页面对象
-        
-    Returns:
-        切换后的主题模式字符串（"light"或"dark"）
-    """
     current_mode = page.theme_mode
     
     if current_mode == ft.ThemeMode.LIGHT:
@@ -159,29 +132,10 @@ def toggle_theme(page: ft.Page) -> str:
 
 
 def get_current_theme_mode(page: ft.Page) -> str:
-    """获取当前主题模式
-    
-    Args:
-        page: Flet页面对象
-        
-    Returns:
-        当前主题模式字符串（"light"或"dark"）
-    """
     return "light" if page.theme_mode == ft.ThemeMode.LIGHT else "dark"
 
 
 def get_theme_colors(theme_mode: str) -> Dict[str, str]:
-    """获取指定主题的颜色配置
-    
-    Args:
-        theme_mode: 主题模式，"light"或"dark"
-        
-    Returns:
-        颜色配置字典
-        
-    Raises:
-        ValueError: 如果theme_mode不是"light"或"dark"
-    """
     if theme_mode == "light":
         return LIGHT_THEME.copy()
     elif theme_mode == "dark":

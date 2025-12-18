@@ -34,7 +34,7 @@ class MemoryProfiler:
         self._monitor_thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
         self._snapshot_baseline = None
-        self._interval = 10  # 默认10秒输出一次
+        self._interval = 10
     
     def start(self, interval: int = 10):
         """启动内存监控

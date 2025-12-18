@@ -1,4 +1,4 @@
-"""登录对话框UI模块 - 快速登录和扫码登录"""
+"""登录对话框"""
 
 import base64
 import logging
@@ -13,21 +13,11 @@ logger = logging.getLogger(__name__)
 
 
 class LoginDialog:
-    """登录对话框组件"""
-    
     def __init__(self, 
                  page: ft.Page,
                  pmhq_port: int,
                  on_login_success: Optional[Callable[[str], None]] = None,
                  on_cancel: Optional[Callable[[], None]] = None):
-        """初始化登录对话框
-        
-        Args:
-            page: Flet页面对象
-            pmhq_port: PMHQ端口号
-            on_login_success: 登录成功回调（参数为uin）
-            on_cancel: 取消登录回调
-        """
         self.page = page
         self.pmhq_port = pmhq_port
         self.on_login_success = on_login_success
@@ -55,16 +45,10 @@ class LoginDialog:
         self.loading_indicator: Optional[ft.ProgressRing] = None
         
     def show(self, auto_login_uin: str = ""):
-        """显示登录对话框
-        
-        Args:
-            auto_login_uin: 自动登录的QQ号（如果指定，会尝试自动登录）
-        """
         # 获取可快速登录的账号列表
         self._fetch_accounts_and_show(auto_login_uin)
     
     def _fetch_accounts_and_show(self, auto_login_uin: str = ""):
-        """获取账号列表并显示对话框"""
         def fetch_thread():
             self.quick_login_accounts = self.login_service.get_quick_login_accounts()
             logger.info(f"获取到 {len(self.quick_login_accounts)} 个可快速登录的账号")
@@ -104,7 +88,6 @@ class LoginDialog:
         thread.start()
     
     def _build_quick_login_dialog(self):
-        """构建快速登录对话框"""
         # 头像
         avatar_url = self.selected_account.face_url if self.selected_account else ""
         self.avatar_image = ft.Container(
@@ -214,7 +197,6 @@ class LoginDialog:
         )
     
     def _build_qrcode_login_dialog(self):
-        """构建扫码登录对话框"""
         # 二维码图片
         self.qrcode_image = ft.Image(
             src="",
@@ -291,7 +273,6 @@ class LoginDialog:
         self._start_qrcode_login()
     
     def _start_qrcode_login(self):
-        """启动扫码登录流程"""
         logger.info("启动扫码登录流程")
         
         # 启动SSE监听
@@ -329,7 +310,6 @@ class LoginDialog:
         thread.start()
     
     def _on_qrcode_received(self, qrcode_info: QRCodeInfo):
-        """收到二维码回调"""
         logger.info(f"收到二维码回调, png_base64长度={len(qrcode_info.png_base64) if qrcode_info.png_base64 else 0}")
         
         async def update_qrcode():
@@ -359,11 +339,9 @@ class LoginDialog:
             logger.warning("page为None，无法更新UI")
     
     def _on_sse_login_success(self, uin: str):
-        """SSE登录成功回调"""
         self._handle_login_success(uin)
     
     def _start_uin_check(self):
-        """启动uin检查线程"""
         if self._uin_check_running:
             return
         
@@ -375,14 +353,12 @@ class LoginDialog:
         self._uin_check_thread.start()
     
     def _stop_uin_check(self):
-        """停止uin检查"""
         self._uin_check_running = False
         if self._uin_check_thread:
             self._uin_check_thread.join(timeout=2)
             self._uin_check_thread = None
     
     def _uin_check_loop(self):
-        """循环检查uin是否已获取（表示登录成功）"""
         import time
         from utils.http_client import HttpClient
         
@@ -414,7 +390,6 @@ class LoginDialog:
             time.sleep(1)
     
     def _handle_login_success(self, uin: str):
-        """处理登录成功"""
         logger.info(f"登录成功: {uin}")
         
         # 标记停止检查（不要在这里join，因为可能是从uin_check_loop中调用的）
@@ -432,11 +407,9 @@ class LoginDialog:
             self.page.run_task(close_and_callback)
     
     def _on_login_click(self, e):
-        """登录按钮点击"""
         self._do_quick_login()
     
     def _do_quick_login(self):
-        """执行快速登录"""
         if not self.selected_account:
             return
         
@@ -483,11 +456,9 @@ class LoginDialog:
         thread.start()
     
     def _on_switch_account_click(self, e):
-        """切换账号按钮点击"""
         self._show_account_list()
     
     def _show_account_list(self):
-        """显示账号列表"""
         # 先关闭主登录对话框
         if self.dialog and self.page:
             self.page.close(self.dialog)
@@ -541,7 +512,6 @@ class LoginDialog:
             self.page.open(self._account_dialog)
     
     def _on_account_cancel_click(self, e):
-        """账号选择对话框取消按钮点击"""
         # 关闭账号选择对话框
         if hasattr(self, '_account_dialog') and self._account_dialog and self.page:
             self.page.close(self._account_dialog)
@@ -552,7 +522,6 @@ class LoginDialog:
             self.page.open(self.dialog)
     
     def _on_account_selected(self, account: LoginAccount):
-        """选择账号"""
         self.selected_account = account
         
         # 关闭账号选择对话框
@@ -565,12 +534,10 @@ class LoginDialog:
             self.page.open(self.dialog)
     
     def _on_qrcode_click(self, e):
-        """扫码登录按钮点击"""
         self.is_qrcode_mode = True
         self._switch_to_qrcode_mode()
     
     def _switch_to_qrcode_mode(self):
-        """切换到扫码登录模式"""
         # 关闭当前对话框
         if self.dialog and self.page:
             self.page.close(self.dialog)
@@ -581,14 +548,13 @@ class LoginDialog:
             self.page.open(self.dialog)
     
     def _on_quick_login_mode_click(self, e):
-        """快速登录模式按钮点击"""
         if not self.quick_login_accounts:
             return
         
         self.is_qrcode_mode = False
         
         # 在后台停止SSE和uin检查，不阻塞UI
-        self._uin_check_running = False  # 立即标记停止
+        self._uin_check_running = False
         def stop_background():
             self.login_service.stop_sse_listener()
             if self._uin_check_thread:
@@ -610,13 +576,11 @@ class LoginDialog:
             self.page.open(self.dialog)
     
     def _on_cancel_click(self, e):
-        """取消按钮点击"""
         self.close()
         if self.on_cancel:
             self.on_cancel()
     
     def close(self):
-        """关闭对话框"""
         # 停止SSE和uin检查
         self._stop_uin_check()
         self.login_service.stop_sse_listener()

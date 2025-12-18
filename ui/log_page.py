@@ -1,4 +1,4 @@
-"""日志页面UI模块 - 显示进程日志输出"""
+"""日志页面"""
 
 import flet as ft
 import threading
@@ -10,8 +10,8 @@ from utils.constants import MAX_LOG_LINES
 class LogPage:
     """日志页面组件 - 使用固定控件池避免内存泄漏"""
 
-    MAX_DISPLAY = 100  # 显示行数
-    AUTO_REFRESH_INTERVAL = 0.5  # 刷新频率
+    MAX_DISPLAY = 100
+    AUTO_REFRESH_INTERVAL = 0.5
 
     def __init__(self, log_collector: LogCollector):
         """初始化日志页面"""
@@ -40,7 +40,7 @@ class LogPage:
             "复制选中",
             icon=ft.Icons.COPY,
             on_click=self._on_copy_logs,
-            visible=False,  # 初始隐藏，有选中时显示
+            visible=False,
             style=ft.ButtonStyle(
                 shape=ft.RoundedRectangleBorder(radius=8),
             ),
@@ -193,7 +193,6 @@ class LogPage:
         except Exception:
             pass
         
-        # 更新按钮可见性
         has_selection = len(self._selected_rows) > 0
         self.copy_btn.visible = has_selection
         self.clear_selection_btn.visible = has_selection
@@ -206,7 +205,7 @@ class LogPage:
             pass
 
     def _update_row_selection(self):
-        """更新所有行的选中状态显示（用于清除选择）"""
+        """清除所有行的选中状态"""
         for i in list(self._selected_rows):
             if i < len(self._log_rows):
                 container, _, _ = self._log_rows[i]
@@ -269,10 +268,10 @@ class LogPage:
 
     def _load_logs(self, force: bool = False):
         """加载日志"""
-        if not self._update_lock.acquire(blocking=False):
-            return
-
-        try:
+        need_update = False
+        need_scroll = False
+        
+        with self._update_lock:
             if not self._is_page_visible:
                 return
 
@@ -284,51 +283,42 @@ class LogPage:
                     self._empty_container.visible = True
                     for container, row, text in self._log_rows:
                         container.visible = False
-                    try:
-                        if self.control and self.control.page and self._is_page_visible:
-                            self.log_list.update()
-                    except Exception:
-                        pass
-                return
+                    need_update = True
+                # 不return，让后面的update在锁外执行
+            else:
+                # 获取最新日志
+                logs = self.log_collector.get_recent_logs(self.MAX_DISPLAY)
+                if logs:
+                    last_log = logs[-1]
+                    current_hash = (log_count, id(last_log), last_log.timestamp)
+                    if force or current_hash != self._last_log_hash:
+                        self._last_log_hash = current_hash
+                        self._empty_container.visible = False
 
-            # 获取最新日志
-            logs = self.log_collector.get_recent_logs(self.MAX_DISPLAY)
-            if not logs:
-                return
-
-            # 检测变化
-            last_log = logs[-1]
-            current_hash = (log_count, id(last_log), last_log.timestamp)
-            if not force and current_hash == self._last_log_hash:
-                return
-
-            self._last_log_hash = current_hash
-            self._empty_container.visible = False
-
-            # 更新预创建的控件
-            for i, (container, row, text) in enumerate(self._log_rows):
-                if i < len(logs):
-                    entry = logs[i]
-                    formatted = self._format_log_entry(entry)
-                    if text.value != formatted:
-                        text.value = formatted
-                        text.color = ft.Colors.RED_700 if entry.level == "stderr" else ft.Colors.ON_SURFACE
-                    if not container.visible:
-                        container.visible = True
-                else:
-                    if container.visible:
-                        container.visible = False
-
+                        for i, (container, row, text) in enumerate(self._log_rows):
+                            if i < len(logs):
+                                entry = logs[i]
+                                formatted = self._format_log_entry(entry)
+                                if text.value != formatted:
+                                    text.value = formatted
+                                    text.color = ft.Colors.RED_700 if entry.level == "stderr" else ft.Colors.ON_SURFACE
+                                if not container.visible:
+                                    container.visible = True
+                            else:
+                                if container.visible:
+                                    container.visible = False
+                        
+                        need_update = True
+                        need_scroll = self._auto_refresh_enabled
+        
+        if need_update:
             try:
                 if self.control and self.control.page and self._is_page_visible:
                     self.log_list.update()
-                    if self._auto_refresh_enabled:
+                    if need_scroll:
                         self.log_list.scroll_to(offset=-1, duration=0)
             except Exception:
                 pass
-
-        finally:
-            self._update_lock.release()
 
     def _auto_refresh_loop(self):
         """自动刷新循环"""

@@ -1,4 +1,4 @@
-"""LLOneBot配置页面UI模块 - 提供LLOneBot配置文件的图形化编辑界面"""
+"""LLOneBot配置页面"""
 
 import flet as ft
 import json
@@ -8,8 +8,6 @@ from typing import Optional, Callable, Dict, Any, List
 
 
 class LLOneBotConfigPage:
-    """LLOneBot配置页面组件"""
-    
     DEFAULT_CONFIG = {
         "webui": {"enable": True, "port": 3080},
         "satori": {"enable": False, "port": 5600, "token": ""},
@@ -58,7 +56,7 @@ class LLOneBotConfigPage:
         self.on_config_saved = on_config_saved
         self.control = None
         self.current_config: Dict[str, Any] = {}
-        self.connect_controls: List[Dict] = []  # 存储每个连接的控件引用
+        self.connect_controls: List[Dict] = []
         
     def _get_config_path(self) -> Optional[str]:
         uin = self.get_uin_func()
@@ -273,7 +271,6 @@ class LLOneBotConfigPage:
         )
 
     def _rebuild_tabs(self):
-        """重建连接标签页"""
         self.connect_controls.clear()
         self.connects_tabs.tabs.clear()
         
@@ -329,7 +326,6 @@ class LLOneBotConfigPage:
         ))
     
     def _build_connect_controls(self, conn: Dict, index: int) -> Dict:
-        """为单个连接构建控件"""
         conn_type = conn.get("type", "ws")
         has_port = conn_type in ["ws", "http"]
         has_url = conn_type in ["ws-reverse", "http-post"]
@@ -362,24 +358,20 @@ class LLOneBotConfigPage:
         return controls
 
     def _on_tab_change(self, e):
-        """标签切换事件（预留）"""
         pass
     
     def _on_open_webui(self, e):
-        """在浏览器中打开WebUI"""
         import webbrowser
         port = self.webui_port.value or "3080"
         webbrowser.open(f"http://localhost:{port}")
     
     def _rebuild_webhook_urls(self, urls: List[str]):
-        """重建 webhook URL 列表"""
         self.milky_webhook_url_controls.clear()
         self.milky_webhook_container.controls.clear()
         for i, url in enumerate(urls):
             self._add_webhook_url_row(url, i)
     
     def _add_webhook_url_row(self, url: str = "", index: int = -1):
-        """添加一行 webhook URL 输入"""
         text_field = ft.TextField(value=url, width=350, hint_text="http://example.com/webhook")
         self.milky_webhook_url_controls.append(text_field)
         idx = len(self.milky_webhook_url_controls) - 1
@@ -392,16 +384,13 @@ class LLOneBotConfigPage:
         self.milky_webhook_container.controls.append(row)
     
     def _on_add_webhook_url(self, e):
-        """添加新的 webhook URL"""
         self._add_webhook_url_row("")
         self._try_update()
     
     def _on_delete_webhook_url(self, index: int):
-        """删除指定索引的 webhook URL"""
         if 0 <= index < len(self.milky_webhook_url_controls):
             self.milky_webhook_url_controls.pop(index)
             self.milky_webhook_container.controls.pop(index)
-            # 更新剩余行的删除按钮索引
             for i, row in enumerate(self.milky_webhook_container.controls):
                 if isinstance(row, ft.Row) and len(row.controls) > 1:
                     btn = row.controls[1]
@@ -410,11 +399,9 @@ class LLOneBotConfigPage:
             self._try_update()
     
     def _collect_webhook_urls(self) -> List[str]:
-        """收集所有 webhook URL"""
         return [tf.value.strip() for tf in self.milky_webhook_url_controls if tf.value and tf.value.strip()]
     
     def _add_connect(self, conn_type: str):
-        """添加新连接"""
         new_conn = copy.deepcopy(self.DEFAULT_CONNECT.get(conn_type, self.DEFAULT_CONNECT["ws"]))
         
         if "connect" not in self.current_config.get("ob11", {}):
@@ -427,7 +414,6 @@ class LLOneBotConfigPage:
         self._try_update()
     
     def _on_delete_connect(self, index: int):
-        """删除指定索引的连接"""
         connects = self.current_config.get("ob11", {}).get("connect", [])
         if 0 <= index < len(connects):
             connects.pop(index)
@@ -436,11 +422,10 @@ class LLOneBotConfigPage:
             if connects:
                 self.connects_tabs.selected_index = min(index, len(connects) - 1)
             else:
-                self.connects_tabs.selected_index = 0  # 切换到"+"标签
+                self.connects_tabs.selected_index = 0
             self._try_update()
     
     def _collect_connects(self) -> List[Dict]:
-        """从控件收集所有连接配置"""
         result = []
         for ctrl in self.connect_controls:
             conn_type = ctrl["type"]

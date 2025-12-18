@@ -1,4 +1,4 @@
-"""首页UI模块 - 显示进程状态、快速操作和系统监控"""
+"""首页/控制面板"""
 from pathlib import Path
 
 import flet as ft
@@ -34,7 +34,7 @@ class ProcessResourceCard:
         self.memory_mb = 0.0
         self.is_running = False
         self.show_download_status = show_download_status
-        self.file_exists = True  # 默认文件存在
+        self.file_exists = True
         self.control = None
         
     def build(self):
@@ -117,22 +117,13 @@ class ProcessResourceCard:
     
     def update_resources(self, cpu_percent: float, memory_mb: float, is_running: bool, 
                         file_exists: bool = True):
-        """更新资源使用情况
-        
-        Args:
-            cpu_percent: CPU使用率百分比
-            memory_mb: 内存使用量（MB）
-            is_running: 是否运行中
-            file_exists: 文件是否存在（仅用于PMHQ）
-        """
+        """更新资源使用情况"""
         self.cpu_percent = cpu_percent
         self.memory_mb = memory_mb
         self.is_running = is_running
         self.file_exists = file_exists
         
-        # 更新状态
         if self.show_download_status and not file_exists:
-            # PMHQ未下载
             self.status_icon.name = ft.Icons.DOWNLOAD
             self.status_icon.color = ft.Colors.ORANGE_600
             self.status_text.value = "未下载"
@@ -148,15 +139,13 @@ class ProcessResourceCard:
             self.status_text.value = "未启动"
             self.status_text.color = ft.Colors.GREY_600
         
-        # 更新CPU（除以核心数得到相对于整个系统的百分比）
+        # 除以核心数得到相对于整个系统的百分比
         cpu_count = psutil.cpu_count() or 1
         normalized_cpu = cpu_percent / cpu_count
         self.cpu_text.value = f"CPU: {normalized_cpu:.1f}%"
         self.cpu_progress.value = min(normalized_cpu / 100.0, 1.0)
         
-        # 更新内存
         self.memory_text.value = f"内存: {memory_mb:.0f} MB"
-        # 使用系统总内存计算百分比
         total_memory_mb = psutil.virtual_memory().total / 1024 / 1024
         self.memory_progress.value = min(memory_mb / total_memory_mb, 1.0)
 
@@ -165,7 +154,6 @@ class ResourceMonitorCard:
     """系统资源监控卡片组件"""
     
     def __init__(self):
-        """初始化资源监控卡片"""
         self.cpu_percent = 0.0
         self.memory_percent = 0.0
         self.control = None
@@ -270,7 +258,7 @@ class LogPreviewCard:
         self.on_view_all_callback = on_view_all
         self.log_entries = []
         self.control = None
-        self._last_log_hash = None  # 用于检测日志是否变化
+        self._last_log_hash = None
         
     def build(self):
         """构建UI组件"""
@@ -350,7 +338,6 @@ class LogPreviewCard:
         return self.control
     
     def _on_view_all_click(self, e):
-        """查看全部按钮点击处理"""
         if self.on_view_all_callback:
             self.on_view_all_callback()
     
@@ -390,7 +377,6 @@ class LogPreviewCard:
             # 隐藏空状态
             self._empty_container.visible = False
             
-            # 更新预创建的控件，而不是创建新控件
             for i, (row, icon_ctrl, text_ctrl) in enumerate(self._log_rows):
                 if i < len(self.log_entries):
                     entry = self.log_entries[i]
@@ -399,7 +385,6 @@ class LogPreviewCard:
                     level = entry.get("level", "stdout")
                     message = entry.get("message", "")
                     
-                    # 根据日志级别设置颜色和图标
                     if level == "stderr":
                         text_ctrl.color = ft.Colors.RED_700
                         icon_ctrl.name = ft.Icons.ERROR_OUTLINE
@@ -408,8 +393,6 @@ class LogPreviewCard:
                         text_ctrl.color = ft.Colors.ON_SURFACE
                         icon_ctrl.name = ft.Icons.INFO_OUTLINE
                         icon_ctrl.color = ft.Colors.BLUE_600
-                    
-                    # LLOneBot 日志已包含时间戳，只显示原始消息
                     if process_name == "LLOneBot":
                         text_ctrl.value = message
                     else:
@@ -418,7 +401,6 @@ class LogPreviewCard:
                 else:
                     row.visible = False
             
-            # 自动滚动到最新日志
             self.log_list.scroll_to(offset=-1, duration=100)
 
 
@@ -461,17 +443,12 @@ class HomePage:
         self.download_ffprobe_dialog = None
         self.is_downloading_ffprobe = False
         self._is_downloading_update = False
-        self._updates_found = []  # 存储发现的更新列表 [(component_name, UpdateInfo), ...]
-        self._pending_app_update_script = None  # 待执行的应用更新脚本路径
+        self._updates_found = []
+        self._pending_app_update_script = None
         
-        # 日志实时更新相关
         self._log_update_scheduled = False
         self._log_update_lock = __import__('threading').Lock()
-        self._log_update_pending = False  # 是否有待处理的日志更新
-        
-        # 进程对象缓存（用于正确计算CPU使用率）
-        # cpu_percent(interval=0) 需要在同一个Process对象上多次调用才能返回正确值
-        self._process_cache = {}  # {pid: psutil.Process}
+        self._log_update_pending = False
         
         # 不再使用回调方式更新日志，改为由资源监控线程统一处理
         # 这样可以避免频繁创建线程导致的内存泄漏
@@ -613,7 +590,6 @@ class HomePage:
         return self.control
     
     def _build_download_dialog(self):
-        """构建PMHQ下载对话框"""
         self.download_progress_bar = ft.ProgressBar(
             value=0,
             width=400,
@@ -665,7 +641,6 @@ class HomePage:
         )
     
     def _build_llonebot_download_dialog(self):
-        """构建LLOneBot下载对话框"""
         self.llonebot_download_progress_bar = ft.ProgressBar(
             value=0,
             width=400,
@@ -717,7 +692,6 @@ class HomePage:
         )
     
     def _build_node_download_dialog(self):
-        """构建Node.exe下载对话框"""
         self.node_download_progress_bar = ft.ProgressBar(
             value=0,
             width=400,
@@ -769,7 +743,6 @@ class HomePage:
         )
     
     def _on_global_button_click(self, e):
-        """全局启动/停止按钮点击处理"""
         if self.services_running:
             self._stop_all_services()
         else:
@@ -802,7 +775,6 @@ class HomePage:
             self.global_start_button.update()
     
     def _stop_all_services(self):
-        """停止所有服务 - 弹出询问对话框"""
         # 检查QQ是否在运行
         qq_pid = self.process_manager.get_qq_pid()
         if qq_pid:
@@ -813,7 +785,6 @@ class HomePage:
             self._do_stop_services(stop_qq=False)
     
     def _show_stop_confirm_dialog(self):
-        """显示停止确认对话框"""
         def on_confirm(e):
             if self.page:
                 self.page.close(dialog)
@@ -872,7 +843,6 @@ class HomePage:
             self._show_error_dialog("停止失败", str(ex))
     
     def _on_global_start_click(self, e):
-        """全局启动按钮点击处理"""
         import logging
         from datetime import datetime
         from core.log_collector import LogEntry
@@ -940,7 +910,6 @@ class HomePage:
                 if self.downloader.check_node_version_valid(system_node):
                     logger.info(f"在系统PATH中找到Node.js (版本>=22): {system_node}")
                     node_exists = True
-                    # 更新配置使用系统的node
                     config["node_path"] = system_node
                     self.config_manager.save_config(config)
                 else:
@@ -953,7 +922,6 @@ class HomePage:
                     # 本地下载的node不需要检查版本（我们下载的肯定是新版）
                     logger.info(f"在本地目录找到Node.js: {local_node_path}")
                     node_exists = True
-                    # 更新配置使用本地的node
                     config["node_path"] = local_node_path
                     self.config_manager.save_config(config)
         logger.info(f"Node.exe可用: {node_exists}")
@@ -966,7 +934,6 @@ class HomePage:
             if system_ffmpeg:
                 logger.info(f"在系统PATH中找到FFmpeg: {system_ffmpeg}")
                 ffmpeg_exists = True
-                # 更新配置使用系统的ffmpeg
                 config["ffmpeg_path"] = system_ffmpeg
                 self.config_manager.save_config(config)
             else:
@@ -975,7 +942,6 @@ class HomePage:
                 if self.downloader.check_file_exists(local_ffmpeg_path):
                     logger.info(f"在本地目录找到FFmpeg: {local_ffmpeg_path}")
                     ffmpeg_exists = True
-                    # 更新配置使用本地的ffmpeg
                     config["ffmpeg_path"] = local_ffmpeg_path
                     self.config_manager.save_config(config)
         logger.info(f"FFmpeg.exe可用: {ffmpeg_exists}")
@@ -988,7 +954,6 @@ class HomePage:
             if system_ffprobe:
                 logger.info(f"在系统PATH中找到FFprobe: {system_ffprobe}")
                 ffprobe_exists = True
-                # 更新配置使用系统的ffprobe
                 config["ffprobe_path"] = system_ffprobe
                 self.config_manager.save_config(config)
             else:
@@ -997,7 +962,6 @@ class HomePage:
                 if self.downloader.check_file_exists(local_ffprobe_path):
                     logger.info(f"在本地目录找到FFprobe: {local_ffprobe_path}")
                     ffprobe_exists = True
-                    # 更新配置使用本地的ffprobe
                     config["ffprobe_path"] = local_ffprobe_path
                     self.config_manager.save_config(config)
         logger.info(f"FFprobe.exe可用: {ffprobe_exists}")
@@ -1007,28 +971,22 @@ class HomePage:
         logger.info(f"LLOneBot文件存在: {llonebot_exists}")
         
         if not pmhq_exists:
-            # 显示PMHQ下载对话框
             logger.info("PMHQ文件不存在，显示下载对话框")
             self._show_download_dialog()
         elif not node_exists:
-            # 显示Node.exe下载对话框
             logger.info("Node.exe不可用，显示下载对话框")
             self._show_node_download_dialog()
         elif not ffmpeg_exists or not ffprobe_exists:
-            # ffmpeg和ffprobe在同一个npm包中，下载一次即可
             logger.info("FFmpeg/FFprobe不可用，显示下载对话框")
             self._show_ffmpeg_download_dialog()
         elif not llonebot_exists:
-            # 显示LLOneBot下载对话框
             logger.info("LLOneBot文件不存在，显示下载对话框")
             self._show_llonebot_download_dialog()
         else:
-            # 直接启动服务
             logger.info("所有文件存在，直接启动服务")
             self._start_all_services()
     
     def _show_download_dialog(self):
-        """显示下载对话框并开始下载"""
         import logging
         logger = logging.getLogger(__name__)
         logger.info("显示下载对话框")
@@ -1037,7 +995,6 @@ class HomePage:
             logger.error("页面引用为空，无法显示对话框")
             return
         
-        # 重置对话框状态
         self.download_progress_bar.value = 0
         self.download_progress_text.value = "准备下载..."
         self.download_status_text.value = "0 MB / 0 MB (0%)"
@@ -1045,12 +1002,10 @@ class HomePage:
         self.download_cancel_button.text = "取消"
         self.is_downloading = True
         
-        # 显示对话框
         if self.page:
             self.page.open(self.download_dialog)
         logger.info("下载对话框已显示")
         
-        # 开始下载（在后台线程中）
         import threading
         download_thread = threading.Thread(target=self._download_pmhq)
         download_thread.daemon = True
@@ -1058,7 +1013,6 @@ class HomePage:
         logger.info("下载线程已启动")
     
     def _download_pmhq(self):
-        """下载PMHQ（在后台线程中执行）"""
         import logging
         logger = logging.getLogger(__name__)
         logger.info("开始下载PMHQ")
@@ -1069,19 +1023,15 @@ class HomePage:
             pmhq_path = pmhq_path.replace('.exe', '.zip')
             logger.info(f"下载目标路径: {pmhq_path}")
             
-            # 确保目录存在
             pmhq_dir = os.path.dirname(pmhq_path)
             if pmhq_dir and not os.path.exists(pmhq_dir):
                 logger.info(f"创建目录: {pmhq_dir}")
                 os.makedirs(pmhq_dir, exist_ok=True)
             
-            # 下载文件
             def progress_callback(downloaded: int, total: int):
                 if not self.is_downloading:
-                    # 用户取消了下载
                     raise DownloadError("下载已取消")
                 
-                # 更新进度
                 if total > 0:
                     progress = downloaded / total
                     self.download_progress_bar.value = progress
@@ -1099,13 +1049,11 @@ class HomePage:
             success = self.downloader.download_pmhq(pmhq_path, progress_callback)
             
             if success and self.is_downloading:
-                # 下载成功
                 self.download_progress_text.value = "下载完成！"
                 self.download_cancel_button.text = "关闭"
                 if self.page:
                     self.page.update()
                 
-                # 等待一秒后关闭对话框
                 import time
                 time.sleep(1)
                 
@@ -1121,28 +1069,22 @@ class HomePage:
                     node_exists = False
                 
                 if not node_exists:
-                    # 显示Node.exe下载对话框
                     self._show_node_download_dialog()
                 else:
-                    # 检查FFmpeg/FFprobe是否需要下载
                     ffmpeg_path = config.get("ffmpeg_path", DEFAULT_CONFIG["ffmpeg_path"])
                     ffprobe_path = config.get("ffprobe_path", DEFAULT_CONFIG["ffprobe_path"])
                     ffmpeg_exists = self.downloader.check_file_exists(ffmpeg_path)
                     ffprobe_exists = self.downloader.check_file_exists(ffprobe_path)
                     
                     if not ffmpeg_exists or not ffprobe_exists:
-                        # ffmpeg和ffprobe在同一个npm包中，下载一次即可
                         self._show_ffmpeg_download_dialog()
                     else:
-                        # 检查LLOneBot是否需要下载
                         llonebot_path = config.get("llonebot_path", DEFAULT_CONFIG["llonebot_path"])
                         llonebot_exists = self.downloader.check_file_exists(llonebot_path)
                         
                         if not llonebot_exists:
-                            # 显示LLOneBot下载对话框
                             self._show_llonebot_download_dialog()
                         else:
-                            # 启动所有服务
                             self._start_all_services()
             
         except DownloadError as ex:
@@ -1163,14 +1105,12 @@ class HomePage:
             self.is_downloading = False
     
     def _on_download_cancel_click(self, e):
-        """取消PMHQ下载按钮点击处理"""
         self.is_downloading = False
         self._update_button_state(False)  # 恢复按钮状态
         if self.page:
             self.page.close(self.download_dialog)
     
     def _show_llonebot_download_dialog(self):
-        """显示LLOneBot下载对话框并开始下载"""
         import logging
         logger = logging.getLogger(__name__)
         logger.info("显示LLOneBot下载对话框")
@@ -1179,7 +1119,6 @@ class HomePage:
             logger.error("页面引用为空，无法显示对话框")
             return
         
-        # 重置对话框状态
         self.llonebot_download_progress_bar.value = 0
         self.llonebot_download_progress_text.value = "准备下载..."
         self.llonebot_download_status_text.value = "0 MB / 0 MB (0%)"
@@ -1187,11 +1126,9 @@ class HomePage:
         self.llonebot_download_cancel_button.text = "取消"
         self.is_downloading_llonebot = True
         
-        # 显示对话框
         self.page.open(self.download_llonebot_dialog)
         logger.info("LLOneBot下载对话框已显示")
         
-        # 开始下载（在后台线程中）
         import threading
         download_thread = threading.Thread(target=self._download_llonebot)
         download_thread.daemon = True
@@ -1199,7 +1136,6 @@ class HomePage:
         logger.info("LLOneBot下载线程已启动")
     
     def _download_llonebot(self):
-        """下载LLOneBot（在后台线程中执行）"""
         import logging
         logger = logging.getLogger(__name__)
         logger.info("开始下载LLOneBot")
@@ -1214,19 +1150,15 @@ class HomePage:
                 llonebot_zip_path = llonebot_path + '.zip'
             logger.info(f"下载目标路径: {llonebot_zip_path}")
             
-            # 确保目录存在
             llonebot_dir = os.path.dirname(llonebot_zip_path)
             if llonebot_dir and not os.path.exists(llonebot_dir):
                 logger.info(f"创建目录: {llonebot_dir}")
                 os.makedirs(llonebot_dir, exist_ok=True)
             
-            # 下载文件
             def progress_callback(downloaded: int, total: int):
                 if not self.is_downloading_llonebot:
-                    # 用户取消了下载
                     raise DownloadError("下载已取消")
                 
-                # 更新进度
                 if total > 0:
                     progress = downloaded / total
                     self.llonebot_download_progress_bar.value = progress
@@ -1244,20 +1176,17 @@ class HomePage:
             success = self.downloader.download_llonebot(llonebot_zip_path, progress_callback)
             
             if success and self.is_downloading_llonebot:
-                # 下载成功
                 self.llonebot_download_progress_text.value = "下载完成！"
                 self.llonebot_download_cancel_button.text = "关闭"
                 if self.page:
                     self.page.update()
                 
-                # 等待一秒后关闭对话框并启动服务
                 import time
                 time.sleep(1)
                 
                 if self.page:
                     self.page.close(self.download_llonebot_dialog)
                 
-                # 启动所有服务
                 self._start_all_services()
             
         except DownloadError as ex:
@@ -1278,14 +1207,12 @@ class HomePage:
             self.is_downloading_llonebot = False
     
     def _on_llonebot_download_cancel_click(self, e):
-        """取消LLOneBot下载按钮点击处理"""
         self.is_downloading_llonebot = False
         self._update_button_state(False)  # 恢复按钮状态
         if self.page:
             self.page.close(self.download_llonebot_dialog)
     
     def _show_node_download_dialog(self):
-        """显示Node.exe下载对话框并开始下载"""
         import logging
         logger = logging.getLogger(__name__)
         logger.info("显示Node.exe下载对话框")
@@ -1294,7 +1221,6 @@ class HomePage:
             logger.error("页面引用为空，无法显示对话框")
             return
         
-        # 重置对话框状态
         self.node_download_progress_bar.value = 0
         self.node_download_progress_text.value = "准备下载..."
         self.node_download_status_text.value = "0 MB / 0 MB (0%)"
@@ -1302,11 +1228,9 @@ class HomePage:
         self.node_download_cancel_button.text = "取消"
         self.is_downloading_node = True
         
-        # 显示对话框
         self.page.open(self.download_node_dialog)
         logger.info("Node.exe下载对话框已显示")
         
-        # 开始下载（在后台线程中）
         import threading
         download_thread = threading.Thread(target=self._download_node)
         download_thread.daemon = True
@@ -1314,7 +1238,6 @@ class HomePage:
         logger.info("Node.exe下载线程已启动")
     
     def _download_node(self):
-        """下载Node.exe（在后台线程中执行）"""
         import logging
         logger = logging.getLogger(__name__)
         logger.info("开始下载Node.exe")
@@ -1324,19 +1247,15 @@ class HomePage:
             node_path = config.get("node_path", DEFAULT_CONFIG["node_path"])
             logger.info(f"下载目标路径: {node_path}")
             
-            # 确保目录存在
             node_dir = os.path.dirname(node_path)
             if node_dir and not os.path.exists(node_dir):
                 logger.info(f"创建目录: {node_dir}")
                 os.makedirs(node_dir, exist_ok=True)
             
-            # 下载文件
             def progress_callback(downloaded: int, total: int):
                 if not self.is_downloading_node:
-                    # 用户取消了下载
                     raise DownloadError("下载已取消")
                 
-                # 更新进度
                 if total > 0:
                     progress = downloaded / total
                     self.node_download_progress_bar.value = progress
@@ -1354,20 +1273,17 @@ class HomePage:
             success = self.downloader.download_node(node_path, progress_callback)
             
             if success and self.is_downloading_node:
-                # 下载成功
                 self.node_download_progress_text.value = "下载完成！"
                 self.node_download_cancel_button.text = "关闭"
                 if self.page:
                     self.page.update()
                 
-                # 等待一秒后关闭对话框
                 import time
                 time.sleep(1)
                 
                 if self.page:
                     self.page.close(self.download_node_dialog)
                 
-                # 检查FFmpeg/FFprobe是否需要下载（它们在同一个npm包中）
                 config = self.config_manager.load_config()
                 ffmpeg_path = config.get("ffmpeg_path", DEFAULT_CONFIG["ffmpeg_path"])
                 ffprobe_path = config.get("ffprobe_path", DEFAULT_CONFIG["ffprobe_path"])
@@ -1375,18 +1291,14 @@ class HomePage:
                 ffprobe_exists = self.downloader.check_file_exists(ffprobe_path)
                 
                 if not ffmpeg_exists or not ffprobe_exists:
-                    # ffmpeg和ffprobe在同一个npm包中，下载一次即可
                     self._show_ffmpeg_download_dialog()
                 else:
-                    # 检查LLOneBot是否需要下载
                     llonebot_path = config.get("llonebot_path", DEFAULT_CONFIG["llonebot_path"])
                     llonebot_exists = self.downloader.check_file_exists(llonebot_path)
                     
                     if not llonebot_exists:
-                        # 显示LLOneBot下载对话框
                         self._show_llonebot_download_dialog()
                     else:
-                        # 启动所有服务
                         self._start_all_services()
             
         except DownloadError as ex:
@@ -1407,14 +1319,12 @@ class HomePage:
             self.is_downloading_node = False
     
     def _on_node_download_cancel_click(self, e):
-        """取消Node.exe下载按钮点击处理"""
         self.is_downloading_node = False
         self._update_button_state(False)  # 恢复按钮状态
         if self.page:
             self.page.close(self.download_node_dialog)
     
     def _build_ffmpeg_download_dialog(self):
-        """构建FFmpeg.exe下载对话框"""
         self.ffmpeg_download_progress_bar = ft.ProgressBar(
             value=0,
             width=400,
@@ -1466,7 +1376,6 @@ class HomePage:
         )
     
     def _show_ffmpeg_download_dialog(self):
-        """显示FFmpeg.exe下载对话框并开始下载"""
         import logging
         logger = logging.getLogger(__name__)
         logger.info("显示FFmpeg.exe下载对话框")
@@ -1475,7 +1384,6 @@ class HomePage:
             logger.error("页面引用为空，无法显示对话框")
             return
         
-        # 重置对话框状态
         self.ffmpeg_download_progress_bar.value = 0
         self.ffmpeg_download_progress_text.value = "准备下载..."
         self.ffmpeg_download_status_text.value = "0 MB / 0 MB (0%)"
@@ -1483,11 +1391,9 @@ class HomePage:
         self.ffmpeg_download_cancel_button.text = "取消"
         self.is_downloading_ffmpeg = True
         
-        # 显示对话框
         self.page.open(self.download_ffmpeg_dialog)
         logger.info("FFmpeg.exe下载对话框已显示")
         
-        # 开始下载（在后台线程中）
         import threading
         download_thread = threading.Thread(target=self._download_ffmpeg)
         download_thread.daemon = True
@@ -1495,7 +1401,6 @@ class HomePage:
         logger.info("FFmpeg.exe下载线程已启动")
     
     def _download_ffmpeg(self):
-        """下载FFmpeg.exe（在后台线程中执行）"""
         import logging
         logger = logging.getLogger(__name__)
         logger.info("开始下载FFmpeg.exe")
@@ -1505,19 +1410,15 @@ class HomePage:
             ffmpeg_path = config.get("ffmpeg_path", DEFAULT_CONFIG["ffmpeg_path"])
             logger.info(f"下载目标路径: {ffmpeg_path}")
             
-            # 确保目录存在
             ffmpeg_dir = os.path.dirname(ffmpeg_path)
             if ffmpeg_dir and not os.path.exists(ffmpeg_dir):
                 logger.info(f"创建目录: {ffmpeg_dir}")
                 os.makedirs(ffmpeg_dir, exist_ok=True)
             
-            # 下载文件
             def progress_callback(downloaded: int, total: int):
                 if not self.is_downloading_ffmpeg:
-                    # 用户取消了下载
                     raise DownloadError("下载已取消")
                 
-                # 更新进度
                 if total > 0:
                     progress = downloaded / total
                     self.ffmpeg_download_progress_bar.value = progress
@@ -1535,30 +1436,24 @@ class HomePage:
             success = self.downloader.download_ffmpeg(ffmpeg_path, progress_callback)
             
             if success and self.is_downloading_ffmpeg:
-                # 下载成功
                 self.ffmpeg_download_progress_text.value = "下载完成！"
                 self.ffmpeg_download_cancel_button.text = "关闭"
                 if self.page:
                     self.page.update()
                 
-                # 等待一秒后关闭对话框
                 import time
                 time.sleep(1)
                 
                 if self.page:
                     self.page.close(self.download_ffmpeg_dialog)
                 
-                # ffmpeg和ffprobe在同一个npm包中，下载ffmpeg后ffprobe也会存在
-                # 检查LLOneBot是否需要下载
                 config = self.config_manager.load_config()
                 llonebot_path = config.get("llonebot_path", DEFAULT_CONFIG["llonebot_path"])
                 llonebot_exists = self.downloader.check_file_exists(llonebot_path)
                 
                 if not llonebot_exists:
-                    # 显示LLOneBot下载对话框
                     self._show_llonebot_download_dialog()
                 else:
-                    # 启动所有服务
                     self._start_all_services()
             
         except DownloadError as ex:
@@ -1579,14 +1474,12 @@ class HomePage:
             self.is_downloading_ffmpeg = False
     
     def _on_ffmpeg_download_cancel_click(self, e):
-        """取消FFmpeg.exe下载按钮点击处理"""
         self.is_downloading_ffmpeg = False
         self._update_button_state(False)  # 恢复按钮状态
         if self.page:
             self.page.close(self.download_ffmpeg_dialog)
     
     def _build_ffprobe_download_dialog(self):
-        """构建FFprobe.exe下载对话框"""
         self.ffprobe_download_progress_bar = ft.ProgressBar(
             value=0,
             width=400,
@@ -1638,7 +1531,6 @@ class HomePage:
         )
     
     def _show_ffprobe_download_dialog(self):
-        """显示FFprobe.exe下载对话框并开始下载"""
         import logging
         logger = logging.getLogger(__name__)
         logger.info("显示FFprobe.exe下载对话框")
@@ -1647,7 +1539,6 @@ class HomePage:
             logger.error("页面引用为空，无法显示对话框")
             return
         
-        # 重置对话框状态
         self.ffprobe_download_progress_bar.value = 0
         self.ffprobe_download_progress_text.value = "准备下载..."
         self.ffprobe_download_status_text.value = "0 MB / 0 MB (0%)"
@@ -1655,11 +1546,9 @@ class HomePage:
         self.ffprobe_download_cancel_button.text = "取消"
         self.is_downloading_ffprobe = True
         
-        # 显示对话框
         self.page.open(self.download_ffprobe_dialog)
         logger.info("FFprobe.exe下载对话框已显示")
         
-        # 开始下载（在后台线程中）
         import threading
         download_thread = threading.Thread(target=self._download_ffprobe)
         download_thread.daemon = True
@@ -1667,7 +1556,6 @@ class HomePage:
         logger.info("FFprobe.exe下载线程已启动")
     
     def _download_ffprobe(self):
-        """下载FFprobe.exe（在后台线程中执行）"""
         import logging
         logger = logging.getLogger(__name__)
         logger.info("开始下载FFprobe.exe")
@@ -1677,19 +1565,15 @@ class HomePage:
             ffprobe_path = config.get("ffprobe_path", DEFAULT_CONFIG["ffprobe_path"])
             logger.info(f"下载目标路径: {ffprobe_path}")
             
-            # 确保目录存在
             ffprobe_dir = os.path.dirname(ffprobe_path)
             if ffprobe_dir and not os.path.exists(ffprobe_dir):
                 logger.info(f"创建目录: {ffprobe_dir}")
                 os.makedirs(ffprobe_dir, exist_ok=True)
             
-            # 下载文件
             def progress_callback(downloaded: int, total: int):
                 if not self.is_downloading_ffprobe:
-                    # 用户取消了下载
                     raise DownloadError("下载已取消")
                 
-                # 更新进度
                 if total > 0:
                     progress = downloaded / total
                     self.ffprobe_download_progress_bar.value = progress
@@ -1707,29 +1591,24 @@ class HomePage:
             success = self.downloader.download_ffprobe(ffprobe_path, progress_callback)
             
             if success and self.is_downloading_ffprobe:
-                # 下载成功
                 self.ffprobe_download_progress_text.value = "下载完成！"
                 self.ffprobe_download_cancel_button.text = "关闭"
                 if self.page:
                     self.page.update()
                 
-                # 等待一秒后关闭对话框
                 import time
                 time.sleep(1)
                 
                 if self.page:
                     self.page.close(self.download_ffprobe_dialog)
                 
-                # 检查LLOneBot是否需要下载
                 config = self.config_manager.load_config()
                 llonebot_path = config.get("llonebot_path", DEFAULT_CONFIG["llonebot_path"])
                 llonebot_exists = self.downloader.check_file_exists(llonebot_path)
                 
                 if not llonebot_exists:
-                    # 显示LLOneBot下载对话框
                     self._show_llonebot_download_dialog()
                 else:
-                    # 启动所有服务
                     self._start_all_services()
             
         except DownloadError as ex:
@@ -1750,14 +1629,12 @@ class HomePage:
             self.is_downloading_ffprobe = False
     
     def _on_ffprobe_download_cancel_click(self, e):
-        """取消FFprobe.exe下载按钮点击处理"""
         self.is_downloading_ffprobe = False
         self._update_button_state(False)  # 恢复按钮状态
         if self.page:
             self.page.close(self.download_ffprobe_dialog)
     
     def _start_all_services(self):
-        """启动所有服务"""
         import logging
         logger = logging.getLogger(__name__)
         
@@ -2060,7 +1937,6 @@ class HomePage:
             self.page.update()
     
     def _show_error_dialog(self, title: str, message: str):
-        """显示错误对话框"""
         if not self.page:
             return
         
@@ -2076,7 +1952,6 @@ class HomePage:
         self.page.open(error_dialog)
     
     def _close_dialog(self, dialog):
-        """关闭对话框"""
         if self.page:
             self.page.close(dialog)
     
@@ -2099,116 +1974,61 @@ class HomePage:
                 self.page.update()
     
     def _on_view_all_logs(self):
-        """查看全部日志处理"""
         if self.on_navigate_logs:
             self.on_navigate_logs()
     
-    def _get_cached_process(self, pid: int) -> psutil.Process:
-        """获取缓存的进程对象，如果不存在或已失效则创建新的
+    def _get_process_resources(self, pid: int) -> tuple:
+        """获取进程的 CPU 和内存使用情况
         
-        Args:
-            pid: 进程ID
-            
         Returns:
-            psutil.Process对象
-            
-        Raises:
-            psutil.NoSuchProcess: 进程不存在
+            (cpu_percent, memory_mb) 或 (0.0, 0.0) 如果获取失败
         """
-        # 检查缓存中是否有该进程
-        if pid in self._process_cache:
-            proc = self._process_cache[pid]
-            # 验证进程是否仍然存在
-            if proc.is_running():
-                return proc
-            else:
-                # 进程已结束，从缓存中移除
-                del self._process_cache[pid]
-        
-        # 创建新的进程对象并缓存
-        proc = psutil.Process(pid)
-        self._process_cache[pid] = proc
-        # 首次调用cpu_percent进行初始化（返回0，但会记录采样点）
-        proc.cpu_percent(interval=0)
-        return proc
-    
-    def _cleanup_process_cache(self, valid_pids: set):
-        """清理不再需要的进程缓存
-        
-        Args:
-            valid_pids: 当前有效的PID集合
-        """
-        # 移除不在有效PID列表中的缓存
-        stale_pids = [pid for pid in self._process_cache if pid not in valid_pids]
-        for pid in stale_pids:
-            del self._process_cache[pid]
+        try:
+            proc = psutil.Process(pid)
+            cpu = proc.cpu_percent(interval=0.05)
+            mem = proc.memory_info().rss / 1024 / 1024
+            return cpu, mem
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            return 0.0, 0.0
     
     def refresh_process_resources(self):
-        """刷新所有进程的资源使用情况
-        
-        Bot占用整合了管理器、PMHQ、LLOneBot的资源
-        """
         import logging
         logger = logging.getLogger(__name__)
         
         try:
-            # 汇总Bot占用（管理器 + PMHQ + LLOneBot）
             total_cpu = 0.0
             total_mem = 0.0
             
-            # 收集当前有效的PID
-            valid_pids = set()
-            
-            # 获取当前进程（管理器自身）
+            # 管理器自身
             manager_pid = os.getpid()
-            valid_pids.add(manager_pid)
-            try:
-                current_process = self._get_cached_process(manager_pid)
-                manager_cpu = current_process.cpu_percent(interval=0)
-                manager_mem = current_process.memory_info().rss / 1024 / 1024
-                total_cpu += manager_cpu
-                total_mem += manager_mem
-                logger.debug(f"管理器 - PID: {manager_pid}, CPU: {manager_cpu:.1f}%, 内存: {manager_mem:.1f}MB")
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                pass
+            cpu, mem = self._get_process_resources(manager_pid)
+            total_cpu += cpu
+            total_mem += mem
+            logger.debug(f"管理器 - PID: {manager_pid}, CPU: {cpu:.1f}%, 内存: {mem:.1f}MB")
             
-            # 使用ProcessManager中的PID来监控进程
             pids = self.process_manager.get_all_pids()
             
-            # 监控PMHQ进程
+            # PMHQ
             pmhq_pid = pids.get("pmhq")
             pmhq_running = False
             if pmhq_pid:
-                valid_pids.add(pmhq_pid)
-                try:
-                    proc = self._get_cached_process(pmhq_pid)
-                    pmhq_cpu = proc.cpu_percent(interval=0)
-                    pmhq_mem = proc.memory_info().rss / 1024 / 1024
-                    total_cpu += pmhq_cpu
-                    total_mem += pmhq_mem
+                cpu, mem = self._get_process_resources(pmhq_pid)
+                if cpu > 0 or mem > 0:
+                    total_cpu += cpu
+                    total_mem += mem
                     pmhq_running = True
-                    logger.debug(f"PMHQ - PID: {pmhq_pid}, CPU: {pmhq_cpu:.1f}%, 内存: {pmhq_mem:.1f}MB")
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    pass
+                    logger.debug(f"PMHQ - PID: {pmhq_pid}, CPU: {cpu:.1f}%, 内存: {mem:.1f}MB")
             
-            # 监控LLOneBot进程（Node.js）
+            # LLOneBot
             llonebot_pid = pids.get("llonebot")
             llonebot_running = False
             if llonebot_pid:
-                valid_pids.add(llonebot_pid)
-                try:
-                    proc = self._get_cached_process(llonebot_pid)
-                    llonebot_cpu = proc.cpu_percent(interval=0)
-                    llonebot_mem = proc.memory_info().rss / 1024 / 1024
-                    total_cpu += llonebot_cpu
-                    total_mem += llonebot_mem
+                cpu, mem = self._get_process_resources(llonebot_pid)
+                if cpu > 0 or mem > 0:
+                    total_cpu += cpu
+                    total_mem += mem
                     llonebot_running = True
-                    logger.debug(f"LLOneBot - PID: {llonebot_pid}, CPU: {llonebot_cpu:.1f}%, 内存: {llonebot_mem:.1f}MB")
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    pass
-            
-            # 清理不再需要的进程缓存
-            self._cleanup_process_cache(valid_pids)
+                    logger.debug(f"LLOneBot - PID: {llonebot_pid}, CPU: {cpu:.1f}%, 内存: {mem:.1f}MB")
             
             # Bot运行状态：PMHQ和LLOneBot都启动才算运行中
             bot_running = pmhq_running and llonebot_running
@@ -2245,7 +2065,6 @@ class HomePage:
         self.log_card.update_logs(log_entries)
     
     def _refresh_log_preview(self):
-        """立即刷新日志预览"""
         if self.log_collector:
             logs = self.log_collector.get_recent_logs(10)
             log_entries = [
@@ -2346,7 +2165,6 @@ class HomePage:
         self.update_manager.check_updates_async(versions)
     
     def _on_update_click(self, e):
-        """点击更新按钮"""
         if not self.update_manager or self.update_manager.is_downloading:
             return
         
@@ -2357,7 +2175,6 @@ class HomePage:
         self._show_update_confirm_dialog()
     
     def _show_update_confirm_dialog(self):
-        """显示更新确认对话框"""
         running = self.update_manager.has_running_processes()
         
         def on_cancel(e):
@@ -2393,7 +2210,6 @@ class HomePage:
             self.page.open(confirm_dialog)
     
     def _start_component_updates(self):
-        """开始下载组件更新"""
         import logging
         logger = logging.getLogger(__name__)
         
@@ -2478,7 +2294,6 @@ class HomePage:
         self.update_manager.download_all_updates_async()
 
     def _auto_restart_after_update(self):
-        """更新完成后自动重新启动服务"""
         import logging
         logger = logging.getLogger(__name__)
         logger.info("更新完成，自动重新启动服务...")

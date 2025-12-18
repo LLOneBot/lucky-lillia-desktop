@@ -1,4 +1,4 @@
-"""进程管理模块 - 管理外部进程的生命周期"""
+"""进程管理模块"""
 
 import subprocess
 import os
@@ -39,9 +39,8 @@ class ProcessManager:
     """管理外部进程的生命周期"""
     
     def __init__(self):
-        """初始化进程管理器"""
         self._processes: Dict[str, subprocess.Popen] = {}
-        self._admin_pids: Dict[str, int] = {}  # 存储以管理员权限启动的进程PID
+        self._admin_pids: Dict[str, int] = {}
         self._status: Dict[str, ProcessStatus] = {
             "pmhq": ProcessStatus.STOPPED,
             "llonebot": ProcessStatus.STOPPED
@@ -49,15 +48,15 @@ class ProcessManager:
         self._lock = threading.Lock()
         self._monitor_thread: Optional[threading.Thread] = None
         self._monitoring = False
-        self._pmhq_port: Optional[int] = None  # 存储PMHQ使用的端口
-        self._uin: Optional[str] = None  # 存储获取到的QQ号
-        self._nickname: Optional[str] = None  # 存储获取到的昵称
-        self._uin_callback: Optional[Callable[[str, str], None]] = None  # uin获取成功的回调(uin, nickname)
+        self._pmhq_port: Optional[int] = None
+        self._uin: Optional[str] = None
+        self._nickname: Optional[str] = None
+        self._uin_callback: Optional[Callable[[str, str], None]] = None
         self._uin_fetch_thread: Optional[threading.Thread] = None
-        self._qq_pid: Optional[int] = None  # 存储QQ进程的PID
-        self._qq_resources: Dict[str, float] = {"cpu": 0.0, "memory": 0.0}  # QQ进程资源占用
-        self._qq_process: Optional["psutil.Process"] = None  # 缓存QQ进程对象（用于正确计算CPU）
-        self._http_client: Optional[HttpClient] = None  # 共享的HTTP客户端实例
+        self._qq_pid: Optional[int] = None
+        self._qq_resources: Dict[str, float] = {"cpu": 0.0, "memory": 0.0}
+        self._qq_process: Optional["psutil.Process"] = None
+        self._http_client: Optional[HttpClient] = None
         
     def start_pmhq(self, pmhq_path: str, config_path: str = "pmhq_config.json", 
                    qq_path: str = "", auto_login_qq: str = "", headless: bool = False) -> bool:
@@ -216,10 +215,8 @@ class ProcessManager:
                     logger.warning(f"读取pmhq_config.json失败，将创建新文件: {e}")
                     config = {}
             
-            # 更新qq_path
             config["qq_path"] = abs_qq_path
             
-            # 写入配置文件
             with open(config_file, 'w', encoding='utf-8') as f:
                 json.dump(config, f, indent=2, ensure_ascii=False)
             
@@ -420,8 +417,8 @@ class ProcessManager:
             try:
                 self._status["llonebot"] = ProcessStatus.STARTING
                 
-                # 启动进程，添加 --pmhq-port 参数传递PMHQ端口
-                cmd = [abs_node_path, abs_script_path]
+                # 启动进程，添加 --enable-source-maps 启用JS源码映射，添加 --pmhq-port 参数传递PMHQ端口
+                cmd = [abs_node_path, "--enable-source-maps", abs_script_path]
                 if self._pmhq_port is not None:
                     cmd.extend(["--", f"--pmhq-port={self._pmhq_port}"])
                 logger.info(f"启动命令: {cmd}")
@@ -664,7 +661,7 @@ class ProcessManager:
         import psutil
         
         start_time = time.time()
-        check_interval = 0.2  # 每200ms检查一次
+        check_interval = 0.2
         
         while time.time() - start_time < timeout:
             all_stopped = True
@@ -745,28 +742,16 @@ class ProcessManager:
         return self._pmhq_port
     
     def get_uin(self) -> Optional[str]:
-        """获取QQ号
-        
-        Returns:
-            QQ号，如果未获取到返回None
-        """
-        return self._uin
+        with self._lock:
+            return self._uin
     
     def get_nickname(self) -> Optional[str]:
-        """获取昵称
-        
-        Returns:
-            昵称，如果未获取到返回None
-        """
-        return self._nickname
+        with self._lock:
+            return self._nickname
     
     def set_uin_callback(self, callback: Callable[[str, str], None]) -> None:
-        """设置uin获取成功的回调函数
-        
-        Args:
-            callback: 回调函数，接收uin和nickname字符串参数
-        """
-        self._uin_callback = callback
+        with self._lock:
+            self._uin_callback = callback
     
     def _start_uin_fetch(self) -> None:
         """启动获取uin的后台线程"""
@@ -794,7 +779,7 @@ class ProcessManager:
             }
         }
         
-        max_attempts = 1200  # 最多尝试次数，一秒一次
+        max_attempts = 1200
         attempt = 0
         client = self._get_http_client()
         
@@ -815,31 +800,33 @@ class ProcessManager:
                         nickname = result.get("nickName") or result.get("nickname") or result.get("nick") or ""
                         
                         if uin:
-                            # 先保存uin（即使nickname为空）
-                            uin_changed = self._uin != uin
+                            with self._lock:
+                                uin_changed = self._uin != uin
+                                if uin_changed:
+                                    self._uin = uin
+                                callback = self._uin_callback
+                            
                             if uin_changed:
-                                self._uin = uin
                                 logger.info(f"成功获取uin: {uin}")
-                                # uin变化时先触发一次回调（用于更新头像）
-                                if self._uin_callback:
+                                if callback:
                                     try:
-                                        self._uin_callback(uin, "")
+                                        callback(uin, "")
                                     except Exception as e:
                                         logger.error(f"uin回调函数执行失败: {e}")
                             
                             if nickname:
-                                self._nickname = nickname
+                                with self._lock:
+                                    self._nickname = nickname
+                                    callback = self._uin_callback
                                 logger.info(f"成功获取nickname: {nickname}")
                                 
-                                # uin和nickname都有了，调用回调函数（用于更新标题）
-                                if self._uin_callback:
+                                if callback:
                                     try:
-                                        self._uin_callback(uin, nickname)
+                                        callback(uin, nickname)
                                     except Exception as e:
                                         logger.error(f"uin回调函数执行失败: {e}")
                                 return
                             else:
-                                # uin获取到了但nickname为空，继续尝试
                                 logger.debug(f"获取到uin: {uin}，但nickname为空，继续尝试...")
                         
             except HttpError as e:
@@ -855,20 +842,12 @@ class ProcessManager:
         logger.warning(f"获取uin失败，已尝试 {max_attempts} 次")
     
     def get_qq_pid(self) -> Optional[int]:
-        """获取QQ进程的PID
-        
-        Returns:
-            QQ进程PID，如果未获取到返回None
-        """
-        return self._qq_pid
+        with self._lock:
+            return self._qq_pid
     
     def get_qq_resources(self) -> Dict[str, float]:
-        """获取QQ进程的资源占用（仅指定pid的进程）
-        
-        Returns:
-            字典，包含 cpu（百分比）和 memory（MB）
-        """
-        return self._qq_resources.copy()
+        with self._lock:
+            return self._qq_resources.copy()
     
     def _get_http_client(self) -> HttpClient:
         """获取共享的HTTP客户端实例（懒加载）
@@ -881,31 +860,27 @@ class ProcessManager:
         return self._http_client
     
     def fetch_qq_process_info(self) -> Optional[int]:
-        """从PMHQ获取QQ进程信息
+        """从PMHQ获取QQ进程信息，如果已有PID且进程仍在运行则复用"""
+        with self._lock:
+            qq_pid = self._qq_pid
         
-        如果已经获取到PID且进程仍在运行，直接复用已有PID，避免重复调用API。
-        
-        Returns:
-            QQ进程PID，如果获取失败返回None
-        """
-        # 如果已有PID，先检查进程是否仍在运行
-        if self._qq_pid is not None:
+        if qq_pid is not None:
             try:
                 import psutil
-                if psutil.pid_exists(self._qq_pid):
-                    # 进程仍存在，更新资源占用并返回
-                    self._update_qq_resources(self._qq_pid)
-                    return self._qq_pid
+                if psutil.pid_exists(qq_pid):
+                    self._update_qq_resources(qq_pid)
+                    return qq_pid
                 else:
-                    # 进程已退出，清空缓存
-                    logger.info(f"QQ进程 {self._qq_pid} 已退出")
-                    self._qq_pid = None
-                    self._qq_process = None
-                    self._qq_resources = {"cpu": 0.0, "memory": 0.0}
+                    logger.info(f"QQ进程 {qq_pid} 已退出")
+                    with self._lock:
+                        self._qq_pid = None
+                        self._qq_process = None
+                        self._qq_resources = {"cpu": 0.0, "memory": 0.0}
             except Exception as e:
                 logger.debug(f"检查QQ进程状态时发生异常: {e}")
-                self._qq_pid = None
-                self._qq_process = None
+                with self._lock:
+                    self._qq_pid = None
+                    self._qq_process = None
         
         if self._pmhq_port is None:
             logger.debug("PMHQ端口未设置，无法获取QQ进程信息")
@@ -934,9 +909,9 @@ class ProcessManager:
                     result = data["data"].get("result", {})
                     pid = result.get("pid")
                     if pid:
-                        self._qq_pid = pid
+                        with self._lock:
+                            self._qq_pid = pid
                         logger.info(f"获取QQ进程PID: {pid}")
-                        # 计算资源占用
                         self._update_qq_resources(pid)
                         return pid
                     else:
@@ -953,54 +928,38 @@ class ProcessManager:
         except Exception as e:
             logger.info(f"获取QQ进程信息时发生异常: {e}")
         
-        # 获取失败时清空资源信息
-        self._qq_process = None
-        self._qq_pid = None
-        self._qq_resources = {"cpu": 0.0, "memory": 0.0}
+        with self._lock:
+            self._qq_process = None
+            self._qq_pid = None
+            self._qq_resources = {"cpu": 0.0, "memory": 0.0}
         return None
     
     def _update_qq_resources(self, pid: int) -> None:
-        """更新QQ进程的资源占用（仅指定pid的进程）
-        
-        Args:
-            pid: QQ进程的PID（由getProcessInfo接口返回）
-        """
         try:
             import psutil
             
-            # 检查是否需要创建新的进程对象
-            # 如果PID变化或进程对象不存在，需要重新创建
-            if self._qq_process is None or self._qq_process.pid != pid:
-                self._qq_process = psutil.Process(pid)
-                # 首次调用cpu_percent进行初始化（返回0，但会记录采样点）
-                self._qq_process.cpu_percent(interval=0)
-                logger.debug(f"创建QQ进程对象，PID: {pid}，首次采样已完成")
+            # 每次创建新的 Process 对象，避免多线程共享问题
+            proc = psutil.Process(pid)
             
-            # 验证进程是否仍在运行
-            if not self._qq_process.is_running():
-                self._qq_process = None
-                self._qq_pid = None
-                self._qq_resources = {"cpu": 0.0, "memory": 0.0}
+            if not proc.is_running():
+                with self._lock:
+                    self._qq_pid = None
+                    self._qq_resources = {"cpu": 0.0, "memory": 0.0}
                 return
             
-            # 获取CPU使用率（使用缓存的进程对象，可以正确计算）
-            cpu = self._qq_process.cpu_percent(interval=0)
+            # 使用 interval=0.05 进行短暂采样，获取准确的 CPU 值
+            cpu = proc.cpu_percent(interval=0.05)
+            memory = proc.memory_info().rss / (1024 * 1024)
             
-            # 获取内存使用量（使用RSS - 物理内存占用）
-            mem_info = self._qq_process.memory_info()
-            memory = mem_info.rss / (1024 * 1024)  # 转换为MB
-            
-            self._qq_resources = {
-                "cpu": cpu,
-                "memory": memory
-            }
+            with self._lock:
+                self._qq_resources = {"cpu": cpu, "memory": memory}
             logger.debug(f"QQ资源占用 - PID: {pid}, CPU: {cpu:.1f}%, 内存: {memory:.1f}MB")
             
         except psutil.NoSuchProcess:
             logger.debug(f"QQ进程 {pid} 不存在")
-            self._qq_process = None
-            self._qq_pid = None
-            self._qq_resources = {"cpu": 0.0, "memory": 0.0}
+            with self._lock:
+                self._qq_pid = None
+                self._qq_resources = {"cpu": 0.0, "memory": 0.0}
         except psutil.AccessDenied:
             logger.debug(f"无权限访问QQ进程 {pid}")
         except Exception as e:

@@ -1,4 +1,4 @@
-"""更新管理器 - 统一管理更新检查和下载"""
+"""更新管理模块"""
 
 import logging
 import threading
@@ -17,8 +17,6 @@ logger = logging.getLogger(__name__)
 
 
 class UpdateManager:
-    """统一管理更新检查和下载"""
-    
     def __init__(self, 
                  update_checker: UpdateChecker,
                  config_manager: ConfigManager,
@@ -51,7 +49,6 @@ class UpdateManager:
                       on_download_progress: Optional[Callable[[str, int, int], None]] = None,
                       on_download_status: Optional[Callable[[str], None]] = None,
                       on_download_complete: Optional[Callable[[List[str], List[Tuple[str, str]], bool], None]] = None):
-        """设置UI回调函数"""
         self._on_check_start = on_check_start
         self._on_check_complete = on_check_complete
         self._on_download_start = on_download_start
@@ -61,43 +58,35 @@ class UpdateManager:
     
     @property
     def has_updates(self) -> bool:
-        """是否有可用更新"""
         with self._lock:
             return len(self._updates_found) > 0
     
     @property
     def updates_found(self) -> List[Tuple[str, UpdateInfo]]:
-        """获取发现的更新列表"""
         with self._lock:
             return self._updates_found.copy()
     
     @property
     def is_checking(self) -> bool:
-        """是否正在检查更新"""
         with self._lock:
             return self._is_checking
     
     @property
     def is_downloading(self) -> bool:
-        """是否正在下载更新"""
         with self._lock:
             return self._is_downloading
     
     @property
     def pending_app_update_script(self) -> Optional[str]:
-        """获取待执行的应用更新脚本"""
         return self._pending_app_update_script
     
     def clear_pending_app_update(self):
-        """清除待执行的应用更新脚本"""
         self._pending_app_update_script = None
     
     def has_pending_app_update(self) -> bool:
-        """检查是否有待执行的应用更新"""
         return self._pending_app_update_script is not None
     
     def get_update_info(self, component: str) -> Optional[UpdateInfo]:
-        """获取指定组件的更新信息"""
         with self._lock:
             for name, info in self._updates_found:
                 if name == component:
@@ -105,21 +94,14 @@ class UpdateManager:
             return None
     
     def clear_update(self, component: str):
-        """清除指定组件的更新状态"""
         with self._lock:
             self._updates_found = [(name, info) for name, info in self._updates_found if name != component]
     
     def clear_all_updates(self):
-        """清除所有更新状态"""
         with self._lock:
             self._updates_found = []
     
     def check_updates_async(self, versions: Dict[str, str]):
-        """异步检查更新
-        
-        Args:
-            versions: 组件名到当前版本号的映射
-        """
         if self.is_checking:
             return
         
@@ -130,7 +112,6 @@ class UpdateManager:
         thread.start()
     
     def _check_updates(self, versions: Dict[str, str]):
-        """检查更新（同步）"""
         with self._lock:
             self._is_checking = True
         
@@ -138,10 +119,9 @@ class UpdateManager:
             self._on_check_start()
         
         try:
-            updates_found = []  # 有更新的组件
-            all_check_results = []  # 所有检查结果（用于UI显示）
+            updates_found = []
+            all_check_results = []
             
-            # 检查管理器更新
             if "app" in versions and versions["app"] and versions["app"] != "未知":
                 app_package = NPM_PACKAGES.get("app")
                 app_repo = GITHUB_REPOS.get("app")
@@ -152,7 +132,6 @@ class UpdateManager:
                     if app_update.has_update:
                         updates_found.append(("管理器", app_update))
             
-            # 检查PMHQ更新
             if "pmhq" in versions and versions["pmhq"] and versions["pmhq"] != "未知":
                 pmhq_package = NPM_PACKAGES.get("pmhq")
                 pmhq_repo = GITHUB_REPOS.get("pmhq")
@@ -163,7 +142,6 @@ class UpdateManager:
                     if pmhq_update.has_update:
                         updates_found.append(("PMHQ", pmhq_update))
             
-            # 检查LLOneBot更新
             if "llonebot" in versions and versions["llonebot"] and versions["llonebot"] != "未知":
                 llonebot_package = NPM_PACKAGES.get("llonebot")
                 llonebot_repo = GITHUB_REPOS.get("llonebot")
@@ -183,7 +161,6 @@ class UpdateManager:
             else:
                 logger.info("所有组件已是最新版本")
             
-            # 回调传递所有检查结果，让UI可以显示"已是最新版本"
             if self._on_check_complete:
                 self._on_check_complete(all_check_results)
                 
@@ -196,7 +173,6 @@ class UpdateManager:
                 self._is_checking = False
     
     def has_running_processes(self) -> bool:
-        """检查是否有进程在运行"""
         return (
             self.process_manager.get_process_status("pmhq") == ProcessStatus.RUNNING or
             self.process_manager.get_process_status("llonebot") == ProcessStatus.RUNNING or
@@ -204,7 +180,6 @@ class UpdateManager:
         )
     
     def download_all_updates_async(self):
-        """异步下载所有更新"""
         if self.is_downloading or not self.has_updates:
             return
         
@@ -215,7 +190,6 @@ class UpdateManager:
         thread.start()
     
     def _download_all_updates(self):
-        """下载所有更新（同步）"""
         with self._lock:
             if self._is_downloading:
                 return
@@ -229,10 +203,8 @@ class UpdateManager:
         error_list = []
         
         try:
-            # 检查更新前是否有进程在运行
             had_running_processes = self.has_running_processes()
             
-            # 停止所有进程
             if had_running_processes:
                 if self._on_download_status:
                     self._on_download_status("正在停止所有进程...")
@@ -244,7 +216,6 @@ class UpdateManager:
                 else:
                     logger.info("所有进程已完全退出")
             
-            # 下载所有更新
             for component_name, update_info in updates_to_download:
                 if self._on_download_status:
                     self._on_download_status(f"正在更新: {component_name}")
@@ -291,7 +262,6 @@ class UpdateManager:
                     logger.error(f"下载{component_name}失败: {ex}")
                     error_list.append((component_name, str(ex)))
             
-            # 清除已更新的组件
             with self._lock:
                 self._updates_found = [(name, info) for name, info in self._updates_found 
                                        if name not in success_list]

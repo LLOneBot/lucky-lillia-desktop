@@ -1,4 +1,4 @@
-"""配置页面UI模块 - 提供配置文件的图形化编辑界面"""
+"""系统配置页面"""
 
 import flet as ft
 from typing import Optional, Callable
@@ -7,23 +7,14 @@ from core.config_manager import ConfigManager, ConfigError
 
 
 class ConfigPage:
-    """配置页面组件"""
-    
     def __init__(self, config_manager: ConfigManager,
                  on_config_saved: Optional[Callable] = None):
-        """初始化配置页面
-        
-        Args:
-            config_manager: 配置管理器实例
-            on_config_saved: 配置保存成功后的回调函数
-        """
         self.config_manager = config_manager
         self.on_config_saved = on_config_saved
         self.control = None
         self.current_config = {}
         
     def build(self):
-        """构建UI组件"""
         # 加载当前配置
         try:
             self.current_config = self.config_manager.load_config()
@@ -303,14 +294,6 @@ class ConfigPage:
 
     
     def _get_initial_directory(self, current_path: str) -> str:
-        """获取文件选择器的初始目录
-        
-        Args:
-            current_path: 当前路径值（可能是相对路径或绝对路径）
-            
-        Returns:
-            初始目录的绝对路径
-        """
         import os
         if not current_path:
             return os.getcwd()
@@ -331,7 +314,6 @@ class ConfigPage:
             return os.getcwd()
     
     def _on_select_qq_path(self, e):
-        """QQ路径选择按钮点击处理"""
         self._current_field = "qq_path"
         initial_dir = self._get_initial_directory(self.qq_path_field.value)
         self.file_picker.pick_files(
@@ -342,7 +324,6 @@ class ConfigPage:
         )
     
     def _on_select_pmhq_path(self, e):
-        """PMHQ路径选择按钮点击处理"""
         self._current_field = "pmhq_path"
         initial_dir = self._get_initial_directory(self.pmhq_path_field.value)
         self.file_picker.pick_files(
@@ -353,7 +334,6 @@ class ConfigPage:
         )
     
     def _on_select_llonebot_path(self, e):
-        """LLOneBot路径选择按钮点击处理"""
         self._current_field = "llonebot_path"
         initial_dir = self._get_initial_directory(self.llonebot_path_field.value)
         self.file_picker.pick_files(
@@ -364,7 +344,6 @@ class ConfigPage:
         )
     
     def _on_select_node_path(self, e):
-        """Node.js路径选择按钮点击处理"""
         self._current_field = "node_path"
         initial_dir = self._get_initial_directory(self.node_path_field.value)
         self.file_picker.pick_files(
@@ -375,15 +354,9 @@ class ConfigPage:
         )
     
     def _on_file_picker_result(self, e: ft.FilePickerResultEvent):
-        """文件选择器结果处理
-        
-        Args:
-            e: 文件选择器结果事件
-        """
         if e.files and len(e.files) > 0:
             selected_path = e.files[0].path
             
-            # 更新对应的输入字段
             if self._current_field == "qq_path":
                 self.qq_path_field.value = selected_path
                 self.qq_path_field.update()
@@ -398,18 +371,14 @@ class ConfigPage:
                 self.node_path_field.update()
     
     def _on_save_config(self, e):
-        """保存配置按钮点击处理"""
-        # 隐藏之前的提示
         self.error_text.visible = False
         self.success_text.visible = False
         
-        # 先加载现有配置，保留其他设置（如 UI 设置）
         try:
             config = self.config_manager.load_config()
         except ConfigError:
             config = self.config_manager.get_default_config()
         
-        # 更新页面上的配置项
         try:
             config["qq_path"] = self.qq_path_field.value.strip()
             config["pmhq_path"] = self.pmhq_path_field.value.strip()
@@ -450,7 +419,6 @@ class ConfigPage:
             self._show_error("配置保存失败，请检查文件权限")
     
     def _trigger_log_cleanup(self):
-        """触发日志清理"""
         try:
             from main import LogCleaner
             log_cleaner = LogCleaner()
@@ -461,11 +429,6 @@ class ConfigPage:
             pass  # 忽略清理失败
     
     def _show_error(self, message: str):
-        """显示错误提示
-        
-        Args:
-            message: 错误消息
-        """
         self.error_text.value = message
         self.error_text.visible = True
         self.success_text.visible = False
@@ -475,11 +438,6 @@ class ConfigPage:
             pass  # 控件未添加到页面，跳过更新
     
     def _show_success(self, message: str):
-        """显示成功提示
-        
-        Args:
-            message: 成功消息
-        """
         self.success_text.value = message
         self.success_text.visible = True
         self.error_text.visible = False
@@ -489,11 +447,9 @@ class ConfigPage:
             pass  # 控件未添加到页面，跳过更新
     
     def refresh(self):
-        """刷新配置显示，从文件重新加载配置"""
         try:
             self.current_config = self.config_manager.load_config()
             
-            # 更新所有输入字段
             self.qq_path_field.value = self.current_config.get("qq_path", "")
             self.pmhq_path_field.value = self.current_config.get("pmhq_path", "")
             self.llonebot_path_field.value = self.current_config.get("llonebot_path", "")
@@ -508,11 +464,9 @@ class ConfigPage:
             retention_hours = retention_seconds // 3600 if retention_seconds > 0 else 0
             self.log_retention_hours_field.value = str(retention_hours)
             
-            # 隐藏提示
             self.error_text.visible = False
             self.success_text.visible = False
             
-            # 更新UI（如果已添加到页面）
             if self.control:
                 try:
                     self.control.update()

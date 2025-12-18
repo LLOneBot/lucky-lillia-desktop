@@ -1,8 +1,9 @@
-"""日志收集模块 - 收集和管理进程日志输出"""
+"""日志收集模块"""
 
 import logging
 import subprocess
 import threading
+import time
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime
@@ -14,7 +15,6 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class LogEntry:
-    """日志条目"""
     timestamp: datetime
     process_name: str
     level: str  # "stdout" 或 "stderr"
@@ -22,14 +22,7 @@ class LogEntry:
 
 
 class LogCollector:
-    """收集和管理进程日志输出"""
-    
     def __init__(self, max_lines: int = 1000):
-        """初始化日志收集器
-        
-        Args:
-            max_lines: 最大保留日志行数
-        """
         self.max_lines = max_lines
         self._logs: deque = deque(maxlen=max_lines)
         self._lock = threading.Lock()
@@ -37,22 +30,10 @@ class LogCollector:
         self._reader_threads: Dict[str, List[threading.Thread]] = {}
     
     def _write_to_log_file(self, entry: LogEntry) -> None:
-        """将日志条目写入日志文件
-        
-        Args:
-            entry: 日志条目
-        """
-        # 使用 INFO 级别记录 stdout，WARNING 级别记录 stderr
         log_level = logging.INFO if entry.level == "stdout" else logging.WARNING
         logger.log(log_level, f"[{entry.process_name}] {entry.message}")
         
     def attach_process(self, process_name: str, process: subprocess.Popen) -> None:
-        """附加到进程的输出流
-        
-        Args:
-            process_name: 进程名称
-            process: subprocess.Popen对象
-        """
         # 创建线程读取stdout
         stdout_thread = threading.Thread(
             target=self._read_stream,
@@ -73,12 +54,6 @@ class LogCollector:
         self._reader_threads[process_name] = [stdout_thread, stderr_thread]
     
     def attach_pty_process(self, process_name: str, pty_process) -> None:
-        """附加到 PTY 进程的输出流
-        
-        Args:
-            process_name: 进程名称
-            pty_process: winpty.PtyProcess 对象
-        """
         # 创建线程读取 PTY 输出
         pty_thread = threading.Thread(
             target=self._read_pty_stream,
@@ -91,12 +66,6 @@ class LogCollector:
         self._reader_threads[process_name] = [pty_thread]
     
     def _read_pty_stream(self, process_name: str, pty_process) -> None:
-        """读取 PTY 进程输出流
-        
-        Args:
-            process_name: 进程名称
-            pty_process: winpty.PtyProcess 对象
-        """
         logger.info(f"开始读取 {process_name} 的 PTY 流")
         
         try:
@@ -120,8 +89,10 @@ class LogCollector:
                             # 写入日志文件
                             self._write_to_log_file(entry)
                             
-                            # 调用回调函数
-                            for callback in self._callbacks:
+                            # 调用回调函数（复制列表避免迭代时修改）
+                            with self._lock:
+                                callbacks = self._callbacks.copy()
+                            for callback in callbacks:
                                 try:
                                     callback(entry)
                                 except Exception:
@@ -135,13 +106,6 @@ class LogCollector:
             logger.debug(f"PTY 流读取循环异常: {e}")
     
     def _read_stream(self, process_name: str, stream, level: str) -> None:
-        """读取进程输出流
-        
-        Args:
-            process_name: 进程名称
-            stream: 输出流对象
-            level: 日志级别 ("stdout" 或 "stderr")
-        """
         logger.info(f"开始读取 {process_name} 的 {level} 流")
         
         try:
@@ -166,24 +130,18 @@ class LogCollector:
                     # 写入日志文件
                     self._write_to_log_file(entry)
                     
-                    # 调用回调函数
-                    for callback in self._callbacks:
+                    # 调用回调函数（复制列表避免迭代时修改）
+                    with self._lock:
+                        callbacks = self._callbacks.copy()
+                    for callback in callbacks:
                         try:
                             callback(entry)
                         except Exception:
-                            pass  # 忽略回调中的错误
+                            pass
         except Exception as e:
             logger.info(f"读取 {process_name} 的 {level} 流时发生异常: {e}")
     
     def get_logs(self, process_name: Optional[str] = None) -> List[LogEntry]:
-        """获取日志条目
-        
-        Args:
-            process_name: 进程名称，None表示获取所有日志
-            
-        Returns:
-            日志条目列表
-        """
         with self._lock:
             if process_name is None:
                 return list(self._logs)
@@ -191,23 +149,10 @@ class LogCollector:
                 return [entry for entry in self._logs if entry.process_name == process_name]
     
     def get_log_count(self) -> int:
-        """获取日志条目数量（不创建副本）
-        
-        Returns:
-            日志条目数量
-        """
         with self._lock:
             return len(self._logs)
     
     def get_recent_logs(self, count: int) -> List[LogEntry]:
-        """获取最近的N条日志（避免创建完整副本）
-        
-        Args:
-            count: 要获取的日志数量
-            
-        Returns:
-            最近的日志条目列表
-        """
         with self._lock:
             if count >= len(self._logs):
                 return list(self._logs)
@@ -217,11 +162,6 @@ class LogCollector:
             return list(islice(self._logs, start_idx, None))
     
     def clear_logs(self, process_name: Optional[str] = None) -> None:
-        """清空日志
-        
-        Args:
-            process_name: 进程名称，None表示清空所有日志
-        """
         with self._lock:
             if process_name is None:
                 self._logs.clear()
@@ -233,34 +173,22 @@ class LogCollector:
                 )
     
     def set_callback(self, callback: Callable[[LogEntry], None]) -> None:
-        """设置新日志回调函数，用于实时更新UI
-        
-        Args:
-            callback: 回调函数，接收LogEntry参数
-        """
-        if callback not in self._callbacks:
-            self._callbacks.append(callback)
+        with self._lock:
+            if callback not in self._callbacks:
+                self._callbacks.append(callback)
     
     def add_callback(self, callback: Callable[[LogEntry], None]) -> None:
-        """添加新日志回调函数（set_callback的别名）
-        
-        Args:
-            callback: 回调函数，接收LogEntry参数
-        """
-        if callback not in self._callbacks:
-            self._callbacks.append(callback)
+        with self._lock:
+            if callback not in self._callbacks:
+                self._callbacks.append(callback)
     
     def remove_callback(self, callback: Callable[[LogEntry], None]) -> None:
-        """移除日志回调函数
-        
-        Args:
-            callback: 要移除的回调函数
-        """
-        if callback in self._callbacks:
-            self._callbacks.remove(callback)
+        with self._lock:
+            if callback in self._callbacks:
+                self._callbacks.remove(callback)
     
     def clear_callbacks(self) -> None:
-        """清除所有回调函数"""
-        self._callbacks.clear()
+        with self._lock:
+            self._callbacks.clear()
 
 

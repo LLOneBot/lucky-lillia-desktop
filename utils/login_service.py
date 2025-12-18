@@ -13,7 +13,6 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class LoginAccount:
-    """登录账号信息"""
     uin: str
     uid: str
     nick_name: str
@@ -27,14 +26,12 @@ class LoginAccount:
 
 @dataclass
 class LoginResult:
-    """登录结果"""
     success: bool
     error_msg: str = ""
 
 
 @dataclass
 class QRCodeInfo:
-    """二维码信息"""
     png_base64: str
     qrcode_url: str
     expire_time: int
@@ -50,11 +47,6 @@ class LoginService:
     PMHQ_CHECK_INTERVAL = 1
     
     def __init__(self, port: int):
-        """初始化登录服务
-        
-        Args:
-            port: PMHQ端口号
-        """
         self._port = port
         self._base_url = f"http://127.0.0.1:{port}"
         self._client = HttpClient(timeout=30)
@@ -65,11 +57,6 @@ class LoginService:
         self._pmhq_ready = False
     
     def is_pmhq_ready(self) -> bool:
-        """检查PMHQ是否已就绪（loginService可用）
-        
-        Returns:
-            PMHQ是否就绪
-        """
         try:
             # 尝试调用一个简单的API来检查PMHQ状态
             payload = {
@@ -100,15 +87,6 @@ class LoginService:
     
     def wait_for_pmhq_ready(self, timeout: Optional[float] = None, 
                            progress_callback: Optional[Callable[[int, int], None]] = None) -> bool:
-        """等待PMHQ就绪
-        
-        Args:
-            timeout: 超时时间（秒），默认使用PMHQ_READY_TIMEOUT
-            progress_callback: 进度回调函数，参数为(已等待秒数, 总超时秒数)
-            
-        Returns:
-            PMHQ是否就绪
-        """
         if self._pmhq_ready:
             return True
             
@@ -133,14 +111,6 @@ class LoginService:
         return False
     
     def get_login_list(self, wait_ready: bool = True) -> List[LoginAccount]:
-        """获取登录账号列表
-        
-        Args:
-            wait_ready: 是否等待PMHQ就绪，默认True
-        
-        Returns:
-            登录账号列表
-        """
         try:
             # 等待PMHQ就绪
             if wait_ready and not self._pmhq_ready:
@@ -210,26 +180,10 @@ class LoginService:
             return []
     
     def get_quick_login_accounts(self) -> List[LoginAccount]:
-        """获取可用于快速登录的账号列表
-        
-        过滤条件: isQuickLogin=True && isUserLogin=False
-        
-        Returns:
-            可快速登录的账号列表
-        """
         all_accounts = self.get_login_list()
         return [acc for acc in all_accounts if acc.is_quick_login and not acc.is_user_login]
     
     def quick_login(self, uin: str, wait_ready: bool = True) -> LoginResult:
-        """使用指定QQ号快速登录
-        
-        Args:
-            uin: QQ号
-            wait_ready: 是否等待PMHQ就绪，默认True
-            
-        Returns:
-            登录结果
-        """
         try:
             # 等待PMHQ就绪
             if wait_ready and not self._pmhq_ready:
@@ -287,14 +241,6 @@ class LoginService:
             return LoginResult(success=False, error_msg=f"登录异常: {e}")
     
     def request_qrcode(self, wait_ready: bool = True) -> bool:
-        """请求获取二维码
-        
-        Args:
-            wait_ready: 是否等待PMHQ就绪，默认True
-        
-        Returns:
-            请求是否成功发送
-        """
         try:
             logger.info(f"开始请求二维码, wait_ready={wait_ready}, _pmhq_ready={self._pmhq_ready}")
             
@@ -328,12 +274,6 @@ class LoginService:
     def start_sse_listener(self, 
                           qrcode_callback: Callable[[QRCodeInfo], None],
                           login_success_callback: Optional[Callable[[str], None]] = None):
-        """启动SSE监听器，用于接收二维码数据
-        
-        Args:
-            qrcode_callback: 收到二维码时的回调函数
-            login_success_callback: 登录成功时的回调函数（参数为uin）
-        """
         if self._sse_running:
             return
         
@@ -348,14 +288,12 @@ class LoginService:
         self._sse_thread.start()
     
     def stop_sse_listener(self):
-        """停止SSE监听器"""
         self._sse_running = False
         if self._sse_thread:
             self._sse_thread.join(timeout=2)
             self._sse_thread = None
     
     def _sse_listen_loop(self):
-        """SSE监听循环"""
         import urllib.request
         import urllib.error
         import socket
@@ -401,11 +339,6 @@ class LoginService:
                     time.sleep(1)
     
     def _handle_sse_data(self, data: dict):
-        """处理SSE数据
-        
-        Args:
-            data: SSE数据
-        """
         data_type = data.get("type")
         logger.info(f"处理SSE数据, type={data_type}")
         

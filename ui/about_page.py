@@ -1,4 +1,4 @@
-"""关于/版本页面UI模块 - 显示版本信息和更新检查"""
+"""关于/版本页面"""
 
 import flet as ft
 import time
@@ -15,7 +15,7 @@ import sys
 
 
 def get_resource_path(relative_path: str) -> str:
-    """获取资源文件的绝对路径（支持 PyInstaller 打包）"""
+    # 支持 PyInstaller 打包
     if getattr(sys, 'frozen', False):
         base_path = sys._MEIPASS
     else:
@@ -24,11 +24,8 @@ def get_resource_path(relative_path: str) -> str:
 
 
 class VersionInfoCard:
-    """版本信息卡片组件"""
-    
     def __init__(self, component_name: str, display_name: str, 
                  on_update_click: Optional[Callable[[str], None]] = None):
-        """初始化版本信息卡片"""
         self.component_name = component_name
         self.display_name = display_name
         self.current_version = "未知"
@@ -39,7 +36,6 @@ class VersionInfoCard:
         self.on_update_click = on_update_click
         
     def build(self):
-        """构建UI组件"""
         self.version_text = ft.Text(
             f"当前版本: {self.current_version}",
             size=15,
@@ -47,13 +43,8 @@ class VersionInfoCard:
             weight=ft.FontWeight.W_500
         )
         
-        # 更新图标
         self.update_icon = ft.Icon(name=ft.Icons.UPDATE, color=ft.Colors.ORANGE_400, size=20, visible=False)
-        
-        # 新版本文字
         self.update_text = ft.Text("", size=12, color=ft.Colors.ORANGE_600, weight=ft.FontWeight.BOLD, visible=False)
-        
-        # 查看详情按钮
         self.detail_button = ft.TextButton(
             "查看详情",
             on_click=lambda e: self._open_release_url(),
@@ -61,15 +52,11 @@ class VersionInfoCard:
             visible=False
         )
         
-        # 已是最新版本图标和文字
         self.latest_icon = ft.Icon(name=ft.Icons.CHECK_CIRCLE_OUTLINE, color=ft.Colors.GREEN_400, size=20, visible=False)
         self.latest_text = ft.Text("已是最新版本", size=12, color=ft.Colors.GREEN_600, visible=False)
-        
-        # 错误图标和文字
         self.error_icon = ft.Icon(name=ft.Icons.ERROR_OUTLINE, color=ft.Colors.RED_400, size=20, visible=False)
         self.error_text = ft.Text("", size=12, color=ft.Colors.RED_600, visible=False)
         
-        # 版本信息行：当前版本 + 更新状态
         self.version_row = ft.Row([
             self.version_text,
             self.update_icon,
@@ -99,12 +86,10 @@ class VersionInfoCard:
         return self.control
     
     def update_version(self, version: str):
-        """更新当前版本显示"""
         self.current_version = version if version else "未知"
         self.version_text.value = f"当前版本: {self.current_version}"
     
     def update_check_result(self, update_info: UpdateInfo):
-        """更新检查结果显示"""
         self.latest_version = update_info.latest_version
         self.has_update = update_info.has_update
         self.release_url = update_info.release_url
@@ -127,7 +112,6 @@ class VersionInfoCard:
             self.latest_text.visible = True
     
     def _hide_all_status(self):
-        """隐藏所有状态元素"""
         self.update_icon.visible = False
         self.update_text.visible = False
         self.detail_button.visible = False
@@ -137,13 +121,11 @@ class VersionInfoCard:
         self.error_text.visible = False
     
     def _open_release_url(self):
-        """打开release页面"""
         if self.release_url:
             import webbrowser
             webbrowser.open(self.release_url)
     
     def clear_update_status(self):
-        """清除更新状态显示"""
         self._hide_all_status()
         self.latest_version = None
         self.has_update = False
@@ -151,13 +133,10 @@ class VersionInfoCard:
 
 
 class AboutPage:
-    """关于/版本页面组件"""
-    
     def __init__(self, 
                  version_detector: VersionDetector,
                  update_manager=None,
                  on_restart_service: Optional[Callable[[], None]] = None):
-        """初始化关于页面"""
         self.version_detector = version_detector
         self.update_manager = update_manager
         self.on_restart_service = on_restart_service
@@ -166,7 +145,6 @@ class AboutPage:
         self.page = None
 
     def build(self, page: ft.Page):
-        """构建UI组件"""
         self.page = page
         
         # 创建版本信息卡片
@@ -304,7 +282,6 @@ class AboutPage:
         return self.control
     
     def _load_versions(self):
-        """加载当前版本信息"""
         app_version = self.version_detector.get_app_version()
         self.app_card.update_version(app_version)
         
@@ -341,7 +318,6 @@ class AboutPage:
         thread.start()
     
     def _on_check_or_update_click(self, e):
-        """检查更新/立即更新按钮点击处理"""
         if not self.update_manager:
             return
         
@@ -354,7 +330,6 @@ class AboutPage:
             self._do_check_update()
     
     def _do_check_update(self):
-        """执行检查更新"""
         if not self.update_manager:
             return
         
@@ -371,7 +346,6 @@ class AboutPage:
         
         def on_check_complete(all_check_results):
             async def update_ui():
-                # 更新所有卡片的检查结果（包括没有更新的）
                 for name, info in all_check_results:
                     if name == "管理器":
                         self.app_card.update_check_result(info)
@@ -383,7 +357,6 @@ class AboutPage:
                 self.check_update_button.disabled = False
                 self.loading_indicator.visible = False
                 
-                # 检查是否有任何组件需要更新
                 has_any_update = any(info.has_update for _, info in all_check_results)
                 if has_any_update:
                     self.check_update_button.text = "立即更新"
@@ -409,7 +382,6 @@ class AboutPage:
         self.update_manager.check_updates_async(versions)
 
     def set_updates_found(self, updates_found: list):
-        """设置发现的更新列表（从首页同步）"""
         if updates_found:
             self.check_update_button.text = "立即更新"
             self.check_update_button.icon = ft.Icons.DOWNLOAD
@@ -432,7 +404,6 @@ class AboutPage:
                 pass
     
     def _start_all_updates(self):
-        """开始更新所有组件"""
         if not self.update_manager or not self.update_manager.has_updates:
             return
         
@@ -471,7 +442,6 @@ class AboutPage:
             self.page.open(confirm_dialog)
     
     def _do_download_all_updates(self):
-        """执行下载所有更新"""
         if not self.update_manager:
             return
         
@@ -559,7 +529,6 @@ class AboutPage:
         self.update_manager.download_all_updates_async()
     
     def _show_app_restart_dialog(self):
-        """显示应用重启对话框"""
         import subprocess
         
         def on_restart(e):
@@ -597,17 +566,14 @@ class AboutPage:
             self.page.open(restart_dialog)
     
     def _open_url(self, url: str):
-        """打开URL"""
         import webbrowser
         webbrowser.open(url)
     
     def _close_dialog(self, dialog: ft.AlertDialog):
-        """关闭对话框"""
         if self.page:
             self.page.close(dialog)
     
     def refresh(self):
-        """刷新页面（重新加载版本信息）"""
         self._load_versions()
         
         # 同步更新管理器的状态到卡片

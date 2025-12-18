@@ -1,4 +1,4 @@
-"""版本检测模块 - 检测本地组件版本"""
+"""版本检测模块"""
 
 import subprocess
 import json
@@ -9,22 +9,7 @@ from typing import Optional
 
 
 class VersionDetector:
-    """检测本地组件版本"""
-    
     def detect_pmhq_version(self, pmhq_path: str) -> Optional[str]:
-        """检测PMHQ版本
-        
-        尝试通过以下方式获取版本号：
-        1. 读取同目录下的 package.json
-        2. 运行 pmhq.exe --version
-        3. 读取文件元数据（Windows）
-        
-        Args:
-            pmhq_path: pmhq.exe的路径
-            
-        Returns:
-            版本号字符串，检测失败返回None
-        """
         if not pmhq_path:
             return None
         
@@ -79,18 +64,6 @@ class VersionDetector:
         return None
     
     def detect_llonebot_version(self, script_path: str) -> Optional[str]:
-        """检测LLOneBot版本
-        
-        尝试从以下位置检测版本：
-        1. 同目录下的 package.json
-        2. llonebot.js 文件头部的版本注释
-        
-        Args:
-            script_path: llonebot.js的路径
-            
-        Returns:
-            版本号字符串，检测失败返回None
-        """
         if not script_path or not os.path.exists(script_path):
             return None
             
@@ -128,13 +101,6 @@ class VersionDetector:
         return None
     
     def get_app_version(self) -> str:
-        """获取应用自身版本号
-        
-        从 __version__.py 文件读取版本号。
-        
-        Returns:
-            版本号字符串
-        """
         try:
             import __version__
             return __version__.__version__

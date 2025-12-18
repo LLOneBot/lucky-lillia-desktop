@@ -1,8 +1,4 @@
-"""GitHub API封装 - 用于查询仓库的最新release信息
-
-注意：此模块已废弃，请使用 npm_api.py 代替。
-保留此模块仅用于向后兼容。
-"""
+"""GitHub API封装（已废弃，请使用 npm_api.py）"""
 
 import re
 import logging
@@ -38,26 +34,6 @@ class ParseError(GitHubAPIError):
 
 
 def get_latest_release(repo: str, timeout: int = UPDATE_CHECK_TIMEOUT, mirror_manager=None) -> Optional[Dict[str, Any]]:
-    """获取GitHub仓库的最新release信息
-    
-    Args:
-        repo: GitHub仓库，格式为 "owner/repo"
-        timeout: 请求超时时间（秒），默认为10秒
-        mirror_manager: MirrorManager实例，如果为None则创建新实例
-        
-    Returns:
-        包含release信息的字典，包含以下字段：
-        - tag_name: 版本标签
-        - name: release名称
-        - html_url: release页面URL
-        - published_at: 发布时间
-        如果请求失败返回None
-        
-    Raises:
-        NetworkError: 网络请求失败
-        TimeoutError: 请求超时
-        ParseError: 响应格式错误
-    """
     # 延迟导入避免循环依赖
     from utils.mirror_manager import MirrorManager
     
@@ -109,7 +85,6 @@ def get_latest_release(repo: str, timeout: int = UPDATE_CHECK_TIMEOUT, mirror_ma
 
 
 def _get_release_from_api(client: HttpClient, repo: str, timeout: int) -> Optional[Dict[str, Any]]:
-    """通过GitHub API获取release信息"""
     api_url = f"https://api.github.com/repos/{repo}/releases/latest"
     
     resp = client.get(api_url, headers={"Accept": "application/vnd.github.v3+json"}, timeout=timeout)
@@ -139,7 +114,6 @@ def _get_release_from_api(client: HttpClient, repo: str, timeout: int) -> Option
 
 
 def _get_release_from_mirror(client: HttpClient, repo: str, mirror: str, timeout: int) -> Optional[Dict[str, Any]]:
-    """通过镜像获取release信息（解析release页面）"""
     release_url = f"{mirror}{repo}/releases/latest"
     
     resp = client.get(release_url, timeout=timeout)
@@ -182,17 +156,6 @@ def _get_release_from_mirror(client: HttpClient, repo: str, mirror: str, timeout
 
 
 def extract_version_from_tag(tag_name: str) -> str:
-    """从tag名称中提取版本号
-    
-    GitHub的tag通常格式为 "v1.0.0" 或 "1.0.0"
-    此函数移除前导的 'v' 字符
-    
-    Args:
-        tag_name: tag名称
-        
-    Returns:
-        版本号字符串
-    """
     if tag_name.startswith("v") or tag_name.startswith("V"):
         return tag_name[1:]
     return tag_name

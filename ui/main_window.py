@@ -1,4 +1,4 @@
-"""主窗口模块 - 实现应用主窗口和导航系统"""
+"""主窗口模块"""
 
 import flet as ft
 from typing import Optional, Callable
@@ -60,21 +60,18 @@ class MainWindow:
             downloader=Downloader()
         )
         
-        # 用于快速中断资源监控线程的事件
         self._stop_monitoring_event = threading.Event()
         
         self.page: Optional[ft.Page] = None
         self.current_page_index = 0
         
-        # 资源监控线程
         self.resource_monitor_thread: Optional[threading.Thread] = None
         self.monitoring_resources = False
         
-        # 托盘相关
         self.close_dialog: Optional[ft.AlertDialog] = None
-        self.remember_choice = False  # 是否记住选择
-        self.tray_icon = None  # pystray 图标
-        self.tray_thread = None  # 托盘线程
+        self.remember_choice = False
+        self.tray_icon = None
+        self.tray_thread = None
         
     def build(self, page: ft.Page):
         """构建主窗口UI
@@ -284,21 +281,9 @@ class MainWindow:
         self._check_minimize_to_tray_on_start()
     
     def _on_nav_change(self, e):
-        """导航栏选择变化处理
-        
-        Args:
-            e: 导航栏变化事件
-        """
-        selected_index = e.control.selected_index
-        self._navigate_to(selected_index)
+        self._navigate_to(e.control.selected_index)
     
     def _navigate_to(self, index: int):
-        """导航到指定页面
-        
-        Args:
-            index: 页面索引 (0=首页, 1=日志, 2=配置, 3=LLOneBot配置, 4=关于)
-        """
-        # 离开当前页面时的处理
         if self.current_page_index == 1 and index != 1:
             self.log_page.on_page_leave()
         
@@ -332,59 +317,30 @@ class MainWindow:
             self.home_page.refresh_process_resources()
     
     def _on_theme_toggle(self, e):
-        """主题切换按钮点击处理"""
         if self.page:
-            # 切换主题
             new_theme = toggle_theme(self.page)
-            
-            # 更新按钮图标
             self.theme_button.icon = (
                 ft.Icons.DARK_MODE if new_theme == "light" else ft.Icons.LIGHT_MODE
             )
-            
-            # 保存主题设置
             self.config_manager.save_setting("theme_mode", new_theme)
             
             self.page.update()
     
     def _on_config_saved(self, config: dict):
-        """配置保存回调处理
-        
-        Args:
-            config: 保存的配置字典
-        """
-        # 配置保存后可以执行一些操作，比如重启进程
         pass
     
     def _on_uin_received(self, uin: str, nickname: str):
-        """uin获取成功的回调
-        
-        Args:
-            uin: QQ号
-            nickname: 昵称
-        """
-        # 有uin就更新头像
         if uin:
             self._update_avatar(uin)
-        # 有nickname才更新标题和窗口标题
         if uin and nickname:
             self._update_home_title(uin, nickname)
             self._update_window_title(uin, nickname)
     
     def _update_avatar(self, uin: str):
-        """更新侧边栏头像
-        
-        Args:
-            uin: QQ号
-        """
         if not uin:
             return
         
-        # 构建QQ头像URL
-        avatar_url = f"https://thirdqq.qlogo.cn/g?b=qq&nk={uin}&s=640"
-        
-        # 更新头像图片
-        self.avatar_image.src = avatar_url
+        self.avatar_image.src = f"https://thirdqq.qlogo.cn/g?b=qq&nk={uin}&s=640"
         self.avatar_image.visible = True
         self.avatar_icon.visible = False
         
@@ -392,26 +348,13 @@ class MainWindow:
             self.page.update()
     
     def _update_home_title(self, uin: str, nickname: str):
-        """更新首页标题
-        
-        Args:
-            uin: QQ号
-            nickname: 昵称
-        """
         if uin and nickname:
             self.home_page.update_title(f"{nickname}({uin})")
     
     def _on_about_page_update_complete(self, component: str):
-        """关于页面更新完成回调
-        
-        Args:
-            component: 更新完成的组件名称 ("app"/"pmhq"/"llonebot")
-        """
-        # 清除控制面板的更新横幅
         self.home_page.clear_update_banner(component)
     
     def _on_restart_service_after_update(self):
-        """更新完成后重启服务的回调"""
         import logging
         logger = logging.getLogger(__name__)
         logger.info("更新完成，自动重启服务...")
@@ -421,24 +364,12 @@ class MainWindow:
         self.home_page._on_global_start_click(None)
     
     def _update_window_title(self, uin: str, nickname: str):
-        """更新窗口标题
-        
-        Args:
-            uin: QQ号
-            nickname: 昵称
-        """
         if self.page and uin and nickname:
             self.page.title = f"{APP_NAME} -- {nickname}({uin})"
             self.page.update()
-            # 同步更新托盘提示
             self._update_tray_title()
     
     def _on_window_event(self, e):
-        """窗口事件处理
-        
-        Args:
-            e: 窗口事件
-        """
         if e.data == "close":
             # 检查用户是否已经记住了选择
             close_to_tray = self.config_manager.load_setting("close_to_tray", None)
@@ -454,7 +385,6 @@ class MainWindow:
                 self._show_close_dialog()
     
     def _show_close_dialog(self):
-        """显示关闭确认对话框"""
         self.remember_choice = False
         
         self.close_dialog = ft.AlertDialog(
@@ -509,16 +439,9 @@ class MainWindow:
             self.page.open(self.close_dialog)
     
     def _on_close_choice(self, to_tray: bool):
-        """处理关闭选择
-        
-        Args:
-            to_tray: True表示收进托盘，False表示直接退出
-        """
-        # 关闭对话框
         if self.close_dialog and self.page:
             self.page.close(self.close_dialog)
         
-        # 如果用户选择记住，保存设置
         if self.remember_choice:
             self.config_manager.save_setting("close_to_tray", to_tray)
         
@@ -528,13 +451,11 @@ class MainWindow:
             self._do_close()
     
     def _minimize_to_tray(self):
-        """最小化到托盘"""
         if self.page:
             self.page.window.visible = False
             self.page.update()
     
     def _restore_from_tray(self, e=None):
-        """从托盘恢复窗口"""
         if self.page:
             self.page.window.visible = True
             # 如果窗口被最小化，先恢复窗口
@@ -544,12 +465,6 @@ class MainWindow:
             self.page.update()
     
     def _do_close(self, force_exit: bool = False):
-        """执行真正的关闭操作
-        
-        Args:
-            force_exit: 是否强制快速退出（用于更新重启）
-        """
-        # 检查是否有待执行的应用更新
         if self.update_manager.has_pending_app_update():
             self._execute_pending_update(self.update_manager.pending_app_update_script)
         
@@ -562,11 +477,6 @@ class MainWindow:
             self.page.window.close()
     
     def _execute_pending_update(self, script_path: str):
-        """执行待处理的应用更新
-        
-        Args:
-            script_path: 更新脚本路径
-        """
         import subprocess
         import os
         
@@ -578,12 +488,6 @@ class MainWindow:
             )
     
     def _cleanup(self, force_cleanup: bool = False):
-        """清理资源，停止所有进程和线程
-        
-        Args:
-            force_cleanup: 是否强制清理（用于更新重启）
-        """
-        # 停止资源监控 - 设置事件立即中断等待
         self.monitoring_resources = False
         self._stop_monitoring_event.set()  # 立即中断 Event.wait()
         if self.resource_monitor_thread and self.resource_monitor_thread.is_alive():
@@ -611,15 +515,13 @@ class MainWindow:
             except Exception:
                 pass
         
-        # 保存窗口尺寸
         if self.page:
             try:
                 self.config_manager.save_setting("window_width", self.page.window.width)
                 self.config_manager.save_setting("window_height", self.page.window.height)
             except Exception:
-                pass  # 忽略保存失败
+                pass
         
-        # 停止所有进程
         self.process_manager.stop_all()
     
     def _setup_system_tray(self):
@@ -687,7 +589,6 @@ class MainWindow:
             self.tray_icon = None
     
     def _run_tray_icon(self):
-        """运行托盘图标的线程函数"""
         try:
             print("托盘图标开始运行...")
             self.tray_icon.run()
@@ -698,13 +599,11 @@ class MainWindow:
             traceback.print_exc()
     
     def _get_current_window_title(self) -> str:
-        """获取当前窗口标题"""
         if self.page and self.page.title:
             return self.page.title
         return APP_NAME
     
     def _update_tray_title(self):
-        """更新托盘图标的提示文字和菜单"""
         if self.tray_icon and hasattr(self, '_pystray'):
             try:
                 current_title = self._get_current_window_title()
@@ -737,7 +636,6 @@ class MainWindow:
         
         # 获取资源文件路径（支持 PyInstaller 打包）
         def get_resource_path(relative_path):
-            """获取资源文件的绝对路径"""
             try:
                 # PyInstaller 创建临时文件夹，并将路径存储在 _MEIPASS 中
                 base_path = sys._MEIPASS
@@ -794,7 +692,6 @@ class MainWindow:
         return img
     
     def _on_tray_show(self, icon=None, item=None):
-        """托盘菜单：显示主窗口"""
         if self.page:
             self.page.window.visible = True
             # 如果窗口被最小化，先恢复窗口
@@ -804,7 +701,6 @@ class MainWindow:
             self.page.update()
     
     def _on_tray_exit(self, icon=None, item=None):
-        """托盘菜单：退出程序"""
         # 停止托盘图标
         if hasattr(self, 'tray_icon') and self.tray_icon:
             self.tray_icon.stop()
@@ -812,7 +708,6 @@ class MainWindow:
         self._do_close()
     
     def _start_resource_monitoring(self):
-        """启动资源监控线程"""
         if not self.monitoring_resources:
             self.monitoring_resources = True
             self._stop_monitoring_event.clear()  # 重置停止事件
@@ -823,7 +718,6 @@ class MainWindow:
             self.resource_monitor_thread.start()
     
     def _check_auto_start_bot(self):
-        """检查是否需要自动启动bot"""
         try:
             # 加载配置
             config = self.config_manager.load_config()
@@ -848,7 +742,6 @@ class MainWindow:
             logger.warning(f"自动启动bot失败: {e}")
     
     def _check_minimize_to_tray_on_start(self):
-        """检查是否需要启动后自动缩进托盘"""
         try:
             # 加载配置
             config = self.config_manager.load_config()
@@ -872,14 +765,11 @@ class MainWindow:
             logger.warning(f"自动缩进托盘失败: {e}")
     
     def _monitor_resources(self):
-        """监控系统资源使用情况"""
         while self.monitoring_resources:
             try:
-                # 更新首页的资源显示
                 if self.current_page_index == 0 and self.page:
                     self.home_page.refresh_process_resources()
                     
-                    # 更新日志预览（只获取最新10条，避免创建完整副本）
                     logs = self.log_collector.get_recent_logs(10)
                     log_entries = [
                         {
@@ -892,15 +782,15 @@ class MainWindow:
                     ]
                     self.home_page.refresh_logs(log_entries)
                     
-                    # 更新UI
+                    # 使用 page.run_thread 确保 UI 更新在主线程执行
                     if self.page:
-                        self.page.update()
+                        try:
+                            self.page.update()
+                        except Exception:
+                            pass
                 
-            except Exception as e:
-                # 忽略监控过程中的错误
+            except Exception:
                 pass
             
-            # 使用 Event.wait 替代 time.sleep，可以被快速中断
             if self._stop_monitoring_event.wait(timeout=RESOURCE_MONITOR_INTERVAL):
-                # 如果事件被设置，立即退出循环
                 break

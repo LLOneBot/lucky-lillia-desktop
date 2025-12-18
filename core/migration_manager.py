@@ -1,4 +1,4 @@
-"""配置迁移模块 - 负责检测和迁移旧版本配置文件"""
+"""配置迁移模块"""
 
 import os
 import shutil
@@ -11,24 +11,13 @@ logger = logging.getLogger(__name__)
 
 
 class MigrationManager:
-    """配置迁移管理器 - 检测并迁移旧配置到新位置"""
-    
     def __init__(self, app_dir: Path):
-        """初始化迁移管理器
-        
-        Args:
-            app_dir: 应用程序所在目录
-        """
         self.app_dir = app_dir
         self.old_data_dir = app_dir / "data"
         self.new_data_dir = app_dir / "bin" / "llonebot" / "data"
     
     def check_migration_needed(self) -> Tuple[bool, List[str], bool, List[str], bool]:
-        """检查是否需要迁移配置
-        
-        Returns:
-            (是否有旧数据, 需要迁移的config文件列表, 是否需要迁移token, 需要迁移的database文件列表, 是否只需删除)
-        """
+        """Returns: (有旧数据, config文件列表, 需迁移token, database文件列表, 只需删除)"""
         # 检查旧目录是否存在
         if not self.old_data_dir.exists():
             return False, [], False, [], False
@@ -84,16 +73,6 @@ class MigrationManager:
     def migrate_configs(
         self, config_files: List[str], migrate_token: bool, db_files: List[str]
     ) -> Tuple[bool, str]:
-        """执行配置迁移
-        
-        Args:
-            config_files: 需要迁移的配置文件列表
-            migrate_token: 是否迁移 webui_token.txt
-            db_files: 需要迁移的 database 文件列表
-            
-        Returns:
-            (是否成功, 错误消息)
-        """
         try:
             # 确保目标目录存在
             self.new_data_dir.mkdir(parents=True, exist_ok=True)
@@ -137,11 +116,9 @@ class MigrationManager:
             return False, error_msg
     
     def delete_old_data_dir(self):
-        """删除旧的 data 目录"""
         self._remove_dir(self.old_data_dir)
     
     def _remove_dir(self, dir_path: Path):
-        """删除整个目录"""
         try:
             if dir_path.exists() and dir_path.is_dir():
                 shutil.rmtree(dir_path)

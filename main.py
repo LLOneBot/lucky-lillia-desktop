@@ -1,18 +1,49 @@
-"""QQ机器人管理器 - 主入口文件
+"""应用主入口"""
 
-这是应用的主入口点，负责：
-1. 初始化所有管理器（ProcessManager、LogCollector、ConfigManager等）
-2. 创建Flet应用实例
-3. 设置应用标题、图标、窗口大小
-4. 启动主窗口
-5. 实现优雅的错误处理和日志记录
-"""
+# 启用faulthandler，定时dump线程堆栈用于调试卡死问题
+import faulthandler
+import os
+import sys
+
+# 每5分钟自动dump一次线程堆栈到文件（用于排查卡死问题）
+os.makedirs('logs', exist_ok=True)
+_fault_file = open('logs/thread_dump.txt', 'w')
+# 打包后sys.stderr可能为None，需要指定file参数
+if sys.stderr is not None:
+    faulthandler.enable()
+faulthandler.dump_traceback_later(300, repeat=True, file=_fault_file)
+
+# 启用 Windows 崩溃转储
+if sys.platform == 'win32':
+    try:
+        import ctypes
+        # 设置错误模式，禁止弹出错误对话框，让程序直接生成转储
+        kernel32 = ctypes.windll.kernel32
+        # SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX
+        kernel32.SetErrorMode(0x0001 | 0x0002 | 0x8000)
+        
+        # 注册未处理异常过滤器，在崩溃时写入信息
+        def crash_handler():
+            try:
+                with open('logs/crash_info.txt', 'a', encoding='utf-8') as f:
+                    import datetime
+                    f.write(f"\n{'='*60}\n")
+                    f.write(f"崩溃时间: {datetime.datetime.now()}\n")
+                    f.write(f"进程ID: {os.getpid()}\n")
+                    import traceback
+                    f.write(f"堆栈:\n{traceback.format_stack()}\n")
+            except:
+                pass
+        
+        import atexit
+        atexit.register(crash_handler)
+    except Exception:
+        pass
 
 import flet as ft
 import sys
 import traceback
 import logging
-import os
 import glob
 import json
 import threading
@@ -99,7 +130,6 @@ class TimedRotatingFileHandler(BaseRotatingHandler):
         return elapsed >= self._get_rollover_interval()
     
     def doRollover(self):
-        """执行日志文件切换"""
         # 关闭当前文件
         if self.stream:
             self.stream.close()
@@ -125,7 +155,7 @@ class ConditionalFileHandler(logging.Handler):
         self._file_handler = None
         self._log_enabled = True
         self._last_config_check = 0
-        self._config_check_interval = 5  # 每5秒检查一次配置
+        self._config_check_interval = 5
         
         # 初始化时读取配置
         self._update_config()
@@ -145,18 +175,15 @@ class ConditionalFileHandler(logging.Handler):
         return {}
     
     def _update_config(self):
-        """更新配置"""
         config = self._load_config()
         self._log_enabled = config.get('log_save_enabled', True)
     
     def _create_file_handler(self):
-        """创建文件handler"""
         if self._file_handler is None:
             self._file_handler = TimedRotatingFileHandler(self.log_dir, self.config_path, encoding=self.encoding)
             self._file_handler.setFormatter(self.formatter)
     
     def emit(self, record):
-        """发送日志记录"""
         # 定期检查配置
         current_time = time.time()
         if current_time - self._last_config_check > self._config_check_interval:
@@ -175,13 +202,11 @@ class ConditionalFileHandler(logging.Handler):
             self._file_handler.emit(record)
     
     def setFormatter(self, fmt):
-        """设置格式化器"""
         super().setFormatter(fmt)
         if self._file_handler:
             self._file_handler.setFormatter(fmt)
     
     def close(self):
-        """关闭handler"""
         if self._file_handler:
             self._file_handler.close()
         super().close()
@@ -231,20 +256,17 @@ class LogCleaner:
             return 3600
     
     def start(self):
-        """启动定时清理线程"""
         if self._cleanup_thread is None or not self._cleanup_thread.is_alive():
             self._stop_event.clear()
             self._cleanup_thread = threading.Thread(target=self._cleanup_loop, daemon=True)
             self._cleanup_thread.start()
     
     def stop(self):
-        """停止定时清理线程"""
         self._stop_event.set()
         if self._cleanup_thread and self._cleanup_thread.is_alive():
             self._cleanup_thread.join(timeout=1)
     
     def _cleanup_loop(self):
-        """清理循环"""
         while not self._stop_event.is_set():
             self.cleanup_now()
             # 动态获取清理间隔，等待下一次清理
@@ -252,7 +274,6 @@ class LogCleaner:
             self._stop_event.wait(interval)
     
     def cleanup_now(self):
-        """立即执行一次清理"""
         _, retention_seconds = get_log_config()
         
         # 清理应用日志目录

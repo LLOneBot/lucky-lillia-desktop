@@ -1,4 +1,4 @@
-"""NPM Registry API封装 - 用于查询npm包的最新版本信息"""
+"""NPM Registry API封装"""
 
 import re
 import logging
@@ -8,22 +8,18 @@ from utils.http_client import HttpClient, TimeoutError as HttpTimeoutError, Conn
 
 
 class NpmAPIError(Exception):
-    """NPM API错误基类"""
     pass
 
 
 class NetworkError(NpmAPIError):
-    """网络请求错误"""
     pass
 
 
 class TimeoutError(NpmAPIError):
-    """请求超时错误"""
     pass
 
 
 class ParseError(NpmAPIError):
-    """响应解析错误"""
     pass
 
 
@@ -32,25 +28,6 @@ logger = logging.getLogger(__name__)
 
 def get_package_info(package_name: str, timeout: int = UPDATE_CHECK_TIMEOUT, 
                      registry_mirrors: Optional[List[str]] = None) -> Optional[Dict[str, Any]]:
-    """获取npm包的信息
-    
-    Args:
-        package_name: npm包名称
-        timeout: 请求超时时间（秒），默认为10秒
-        registry_mirrors: npm镜像列表，如果为None则使用默认镜像
-        
-    Returns:
-        包含包信息的字典，包含以下字段：
-        - name: 包名
-        - version: 最新版本
-        - dist: 分发信息（包含tarball下载地址）
-        如果请求失败返回None
-        
-    Raises:
-        NetworkError: 网络请求失败
-        TimeoutError: 请求超时
-        ParseError: 响应格式错误
-    """
     if registry_mirrors is None:
         registry_mirrors = NPM_REGISTRY_MIRRORS.copy()
     
@@ -92,8 +69,6 @@ def get_package_info(package_name: str, timeout: int = UPDATE_CHECK_TIMEOUT,
 
 
 def _get_package_from_registry(client: HttpClient, package_name: str, registry: str, timeout: int) -> Optional[Dict[str, Any]]:
-    """从npm registry获取包信息"""
-    # 构建API URL - 获取最新版本
     # 处理scoped包名（如 @anthropic/sdk）
     encoded_name = package_name.replace("/", "%2F")
     api_url = f"{registry.rstrip('/')}/{encoded_name}/latest"
@@ -128,20 +103,6 @@ def _get_package_from_registry(client: HttpClient, package_name: str, registry: 
 def get_package_tarball_url(package_name: str, version: Optional[str] = None,
                             timeout: int = UPDATE_CHECK_TIMEOUT,
                             registry_mirrors: Optional[List[str]] = None) -> str:
-    """获取npm包的tarball下载URL
-    
-    Args:
-        package_name: npm包名称
-        version: 版本号，如果为None则获取最新版本
-        timeout: 请求超时时间（秒）
-        registry_mirrors: npm镜像列表
-        
-    Returns:
-        tarball下载URL
-        
-    Raises:
-        NetworkError: 无法获取下载链接
-    """
     package_info = get_package_info(package_name, timeout, registry_mirrors)
     
     if not package_info:
@@ -157,17 +118,6 @@ def get_package_tarball_url(package_name: str, version: Optional[str] = None,
 
 
 def extract_version_from_tag(tag_name: str) -> str:
-    """从tag名称中提取版本号
-    
-    npm的版本通常格式为 "v1.0.0" 或 "1.0.0"
-    此函数移除前导的 'v' 字符
-    
-    Args:
-        tag_name: tag名称
-        
-    Returns:
-        版本号字符串
-    """
     if tag_name.startswith("v") or tag_name.startswith("V"):
         return tag_name[1:]
     return tag_name
