@@ -449,9 +449,14 @@ class HomePage:
         self._log_update_scheduled = False
         self._log_update_lock = __import__('threading').Lock()
         self._log_update_pending = False
-        
-        # 不再使用回调方式更新日志，改为由资源监控线程统一处理
-        # 这样可以避免频繁创建线程导致的内存泄漏
+    
+    def _safe_update(self):
+        """线程安全的 UI 更新，确保在主线程执行"""
+        if self.page:
+            try:
+                self.page.run_thread(lambda: self.page.update() if self.page else None)
+            except Exception:
+                pass
         
     def build(self):
         """构建UI组件"""
@@ -1043,16 +1048,14 @@ class HomePage:
                     self.download_progress_text.value = f"正在下载... {percentage}%"
                     self.download_status_text.value = f"{downloaded_mb:.1f} MB / {total_mb:.1f} MB ({percentage}%)"
                     
-                    if self.page:
-                        self.page.update()
+                    self._safe_update()
             
             success = self.downloader.download_pmhq(pmhq_path, progress_callback)
             
             if success and self.is_downloading:
                 self.download_progress_text.value = "下载完成！"
                 self.download_cancel_button.text = "关闭"
-                if self.page:
-                    self.page.update()
+                self._safe_update()
                 
                 import time
                 time.sleep(1)
@@ -1088,19 +1091,17 @@ class HomePage:
                             self._start_all_services()
             
         except DownloadError as ex:
-            if self.is_downloading:  # 只在未取消时显示错误
+            if self.is_downloading:
                 self.download_progress_text.value = "下载失败"
                 self.download_status_text.value = str(ex)
                 self.download_cancel_button.text = "关闭"
-                if self.page:
-                    self.page.update()
+                self._safe_update()
         except Exception as ex:
             if self.is_downloading:
                 self.download_progress_text.value = "下载失败"
                 self.download_status_text.value = f"错误: {str(ex)}"
                 self.download_cancel_button.text = "关闭"
-                if self.page:
-                    self.page.update()
+                self._safe_update()
         finally:
             self.is_downloading = False
     
@@ -1170,16 +1171,14 @@ class HomePage:
                     self.llonebot_download_progress_text.value = f"正在下载... {percentage}%"
                     self.llonebot_download_status_text.value = f"{downloaded_mb:.1f} MB / {total_mb:.1f} MB ({percentage}%)"
                     
-                    if self.page:
-                        self.page.update()
+                    self._safe_update()
             
             success = self.downloader.download_llonebot(llonebot_zip_path, progress_callback)
             
             if success and self.is_downloading_llonebot:
                 self.llonebot_download_progress_text.value = "下载完成！"
                 self.llonebot_download_cancel_button.text = "关闭"
-                if self.page:
-                    self.page.update()
+                self._safe_update()
                 
                 import time
                 time.sleep(1)
@@ -1190,19 +1189,17 @@ class HomePage:
                 self._start_all_services()
             
         except DownloadError as ex:
-            if self.is_downloading_llonebot:  # 只在未取消时显示错误
+            if self.is_downloading_llonebot:
                 self.llonebot_download_progress_text.value = "下载失败"
                 self.llonebot_download_status_text.value = str(ex)
                 self.llonebot_download_cancel_button.text = "关闭"
-                if self.page:
-                    self.page.update()
+                self._safe_update()
         except Exception as ex:
             if self.is_downloading_llonebot:
                 self.llonebot_download_progress_text.value = "下载失败"
                 self.llonebot_download_status_text.value = f"错误: {str(ex)}"
                 self.llonebot_download_cancel_button.text = "关闭"
-                if self.page:
-                    self.page.update()
+                self._safe_update()
         finally:
             self.is_downloading_llonebot = False
     
@@ -1267,16 +1264,14 @@ class HomePage:
                     self.node_download_progress_text.value = f"正在下载... {percentage}%"
                     self.node_download_status_text.value = f"{downloaded_mb:.1f} MB / {total_mb:.1f} MB ({percentage}%)"
                     
-                    if self.page:
-                        self.page.update()
+                    self._safe_update()
             
             success = self.downloader.download_node(node_path, progress_callback)
             
             if success and self.is_downloading_node:
                 self.node_download_progress_text.value = "下载完成！"
                 self.node_download_cancel_button.text = "关闭"
-                if self.page:
-                    self.page.update()
+                self._safe_update()
                 
                 import time
                 time.sleep(1)
@@ -1302,19 +1297,17 @@ class HomePage:
                         self._start_all_services()
             
         except DownloadError as ex:
-            if self.is_downloading_node:  # 只在未取消时显示错误
+            if self.is_downloading_node:
                 self.node_download_progress_text.value = "下载失败"
                 self.node_download_status_text.value = str(ex)
                 self.node_download_cancel_button.text = "关闭"
-                if self.page:
-                    self.page.update()
+                self._safe_update()
         except Exception as ex:
             if self.is_downloading_node:
                 self.node_download_progress_text.value = "下载失败"
                 self.node_download_status_text.value = f"错误: {str(ex)}"
                 self.node_download_cancel_button.text = "关闭"
-                if self.page:
-                    self.page.update()
+                self._safe_update()
         finally:
             self.is_downloading_node = False
     
@@ -1430,16 +1423,14 @@ class HomePage:
                     self.ffmpeg_download_progress_text.value = f"正在下载... {percentage}%"
                     self.ffmpeg_download_status_text.value = f"{downloaded_mb:.1f} MB / {total_mb:.1f} MB ({percentage}%)"
                     
-                    if self.page:
-                        self.page.update()
+                    self._safe_update()
             
             success = self.downloader.download_ffmpeg(ffmpeg_path, progress_callback)
             
             if success and self.is_downloading_ffmpeg:
                 self.ffmpeg_download_progress_text.value = "下载完成！"
                 self.ffmpeg_download_cancel_button.text = "关闭"
-                if self.page:
-                    self.page.update()
+                self._safe_update()
                 
                 import time
                 time.sleep(1)
@@ -1457,19 +1448,17 @@ class HomePage:
                     self._start_all_services()
             
         except DownloadError as ex:
-            if self.is_downloading_ffmpeg:  # 只在未取消时显示错误
+            if self.is_downloading_ffmpeg:
                 self.ffmpeg_download_progress_text.value = "下载失败"
                 self.ffmpeg_download_status_text.value = str(ex)
                 self.ffmpeg_download_cancel_button.text = "关闭"
-                if self.page:
-                    self.page.update()
+                self._safe_update()
         except Exception as ex:
             if self.is_downloading_ffmpeg:
                 self.ffmpeg_download_progress_text.value = "下载失败"
                 self.ffmpeg_download_status_text.value = f"错误: {str(ex)}"
                 self.ffmpeg_download_cancel_button.text = "关闭"
-                if self.page:
-                    self.page.update()
+                self._safe_update()
         finally:
             self.is_downloading_ffmpeg = False
     
@@ -1585,16 +1574,14 @@ class HomePage:
                     self.ffprobe_download_progress_text.value = f"正在下载... {percentage}%"
                     self.ffprobe_download_status_text.value = f"{downloaded_mb:.1f} MB / {total_mb:.1f} MB ({percentage}%)"
                     
-                    if self.page:
-                        self.page.update()
+                    self._safe_update()
             
             success = self.downloader.download_ffprobe(ffprobe_path, progress_callback)
             
             if success and self.is_downloading_ffprobe:
                 self.ffprobe_download_progress_text.value = "下载完成！"
                 self.ffprobe_download_cancel_button.text = "关闭"
-                if self.page:
-                    self.page.update()
+                self._safe_update()
                 
                 import time
                 time.sleep(1)
@@ -1612,19 +1599,17 @@ class HomePage:
                     self._start_all_services()
             
         except DownloadError as ex:
-            if self.is_downloading_ffprobe:  # 只在未取消时显示错误
+            if self.is_downloading_ffprobe:
                 self.ffprobe_download_progress_text.value = "下载失败"
                 self.ffprobe_download_status_text.value = str(ex)
                 self.ffprobe_download_cancel_button.text = "关闭"
-                if self.page:
-                    self.page.update()
+                self._safe_update()
         except Exception as ex:
             if self.is_downloading_ffprobe:
                 self.ffprobe_download_progress_text.value = "下载失败"
                 self.ffprobe_download_status_text.value = f"错误: {str(ex)}"
                 self.ffprobe_download_cancel_button.text = "关闭"
-                if self.page:
-                    self.page.update()
+                self._safe_update()
         finally:
             self.is_downloading_ffprobe = False
     

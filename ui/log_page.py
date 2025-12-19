@@ -173,7 +173,6 @@ class LogPage:
         self._auto_refresh_enabled = e.control.value
 
     def _on_row_click(self, idx: int):
-        """点击行选中/取消选中"""
         if idx >= len(self._log_rows):
             return
         
@@ -186,46 +185,60 @@ class LogPage:
             self._selected_rows.add(idx)
             container.bgcolor = ft.Colors.with_opacity(0.2, ft.Colors.PRIMARY)
         
-        # 只更新被点击的行
-        try:
-            if self.control and self.control.page:
-                container.update()
-        except Exception:
-            pass
-        
         has_selection = len(self._selected_rows) > 0
         self.copy_btn.visible = has_selection
         self.clear_selection_btn.visible = has_selection
         
         try:
-            if self.control and self.control.page:
-                self.copy_btn.update()
-                self.clear_selection_btn.update()
+            page = self.control.page if self.control else None
+            if page:
+                def safe_update():
+                    try:
+                        container.update()
+                        self.copy_btn.update()
+                        self.clear_selection_btn.update()
+                    except Exception:
+                        pass
+                page.run_thread(safe_update)
         except Exception:
             pass
 
     def _update_row_selection(self):
-        """清除所有行的选中状态"""
+        containers_to_update = []
         for i in list(self._selected_rows):
             if i < len(self._log_rows):
                 container, _, _ = self._log_rows[i]
                 container.bgcolor = None
-                try:
-                    if self.control and self.control.page:
-                        container.update()
-                except Exception:
-                    pass
+                containers_to_update.append(container)
         self._selected_rows.clear()
+        
+        try:
+            page = self.control.page if self.control else None
+            if page and containers_to_update:
+                def safe_update():
+                    try:
+                        for c in containers_to_update:
+                            c.update()
+                    except Exception:
+                        pass
+                page.run_thread(safe_update)
+        except Exception:
+            pass
 
     def _on_clear_selection(self, e):
-        """取消所有选择"""
-        self._update_row_selection()  # 这会清除选中并更新UI
+        self._update_row_selection()
         self.copy_btn.visible = False
         self.clear_selection_btn.visible = False
         try:
-            if self.control and self.control.page:
-                self.copy_btn.update()
-                self.clear_selection_btn.update()
+            page = self.control.page if self.control else None
+            if page:
+                def safe_update():
+                    try:
+                        self.copy_btn.update()
+                        self.clear_selection_btn.update()
+                    except Exception:
+                        pass
+                page.run_thread(safe_update)
         except Exception:
             pass
 
@@ -252,17 +265,21 @@ class LogPage:
             self._on_clear_selection(None)
 
     def _on_clear_logs(self, e):
-        """清空日志"""
         self.log_collector.clear_logs()
         self._last_log_hash = None
-        # 隐藏所有行，显示空状态
         self._empty_container.visible = True
         for container, row, text in self._log_rows:
             container.visible = False
             text.value = ""
         try:
-            if self.control and self.control.page:
-                self.log_list.update()
+            page = self.control.page if self.control else None
+            if page:
+                def safe_update():
+                    try:
+                        self.log_list.update()
+                    except Exception:
+                        pass
+                page.run_thread(safe_update)
         except Exception:
             pass
 
@@ -313,10 +330,17 @@ class LogPage:
         
         if need_update:
             try:
-                if self.control and self.control.page and self._is_page_visible:
-                    self.log_list.update()
-                    if need_scroll:
-                        self.log_list.scroll_to(offset=-1, duration=0)
+                page = self.control.page if self.control else None
+                if page and self._is_page_visible:
+                    def safe_update():
+                        try:
+                            if self.control and self.control.page and self._is_page_visible:
+                                self.log_list.update()
+                                if need_scroll:
+                                    self.log_list.scroll_to(offset=-1, duration=0)
+                        except Exception:
+                            pass
+                    page.run_thread(safe_update)
             except Exception:
                 pass
 

@@ -1,47 +1,6 @@
-"""应用主入口"""
-
-# 启用faulthandler，定时dump线程堆栈用于调试卡死问题
-import faulthandler
 import os
 import sys
-
-# 每5分钟自动dump一次线程堆栈到文件（用于排查卡死问题）
-os.makedirs('logs', exist_ok=True)
-_fault_file = open('logs/thread_dump.txt', 'w')
-# 打包后sys.stderr可能为None，需要指定file参数
-if sys.stderr is not None:
-    faulthandler.enable()
-faulthandler.dump_traceback_later(300, repeat=True, file=_fault_file)
-
-# 启用 Windows 崩溃转储
-if sys.platform == 'win32':
-    try:
-        import ctypes
-        # 设置错误模式，禁止弹出错误对话框，让程序直接生成转储
-        kernel32 = ctypes.windll.kernel32
-        # SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX
-        kernel32.SetErrorMode(0x0001 | 0x0002 | 0x8000)
-        
-        # 注册未处理异常过滤器，在崩溃时写入信息
-        def crash_handler():
-            try:
-                with open('logs/crash_info.txt', 'a', encoding='utf-8') as f:
-                    import datetime
-                    f.write(f"\n{'='*60}\n")
-                    f.write(f"崩溃时间: {datetime.datetime.now()}\n")
-                    f.write(f"进程ID: {os.getpid()}\n")
-                    import traceback
-                    f.write(f"堆栈:\n{traceback.format_stack()}\n")
-            except:
-                pass
-        
-        import atexit
-        atexit.register(crash_handler)
-    except Exception:
-        pass
-
 import flet as ft
-import sys
 import traceback
 import logging
 import glob

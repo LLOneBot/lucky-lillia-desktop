@@ -345,7 +345,10 @@ class MainWindow:
         self.avatar_icon.visible = False
         
         if self.page:
-            self.page.update()
+            try:
+                self.page.run_thread(lambda: self.page.update() if self.page else None)
+            except Exception:
+                pass
     
     def _update_home_title(self, uin: str, nickname: str):
         if uin and nickname:
@@ -366,7 +369,10 @@ class MainWindow:
     def _update_window_title(self, uin: str, nickname: str):
         if self.page and uin and nickname:
             self.page.title = f"{APP_NAME} -- {nickname}({uin})"
-            self.page.update()
+            try:
+                self.page.run_thread(lambda: self.page.update() if self.page else None)
+            except Exception:
+                pass
             self._update_tray_title()
     
     def _on_window_event(self, e):
@@ -782,10 +788,16 @@ class MainWindow:
                     ]
                     self.home_page.refresh_logs(log_entries)
                     
-                    # 使用 page.run_thread 确保 UI 更新在主线程执行
+                    # 使用 run_thread 确保 UI 更新在主线程执行，避免竞态条件
                     if self.page:
+                        def safe_update():
+                            try:
+                                if self.page:
+                                    self.page.update()
+                            except Exception:
+                                pass
                         try:
-                            self.page.update()
+                            self.page.run_thread(safe_update)
                         except Exception:
                             pass
                 
