@@ -71,3 +71,5 @@ DEFAULT_THEME = "light"
 TRAY_TOOLTIP = "幸运莉莉娅 - QQ机器人管理器"
 CLOSE_TO_TRAY_DEFAULT = False
 MINIMIZE_TO_TRAY_ON_START_DEFAULT = False
+
+QQ_DOWNLOAD_URL = "https://dldir1v6.qq.com/qqfile/qq/QQNT/c50d6326/QQ9.9.22.40768_x64.exe"

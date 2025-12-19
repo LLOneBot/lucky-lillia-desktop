@@ -6,7 +6,7 @@ import zipfile
 import tarfile
 import logging
 from typing import Optional, Callable
-from utils.constants import UPDATE_CHECK_TIMEOUT, NPM_PACKAGES, NPM_REGISTRY_MIRRORS
+from utils.constants import UPDATE_CHECK_TIMEOUT, NPM_PACKAGES, NPM_REGISTRY_MIRRORS, QQ_DOWNLOAD_URL
 from utils.npm_api import get_package_info, get_package_tarball_url, NpmAPIError, NetworkError, TimeoutError
 from utils.http_client import HttpClient, TimeoutError as HttpTimeoutError, ConnectionError as HttpConnectionError
 
@@ -271,6 +271,37 @@ class Downloader:
     def get_app_update_download_url(self) -> str:
         package_name = NPM_PACKAGES.get("app", "lucky-lillia-desktop")
         return self._get_npm_tarball_url(package_name)
+
+    def download_qq(self, save_path: str,
+                   progress_callback: Optional[Callable[[int, int], None]] = None) -> bool:
+        try:
+            client = HttpClient(timeout=self.timeout)
+            
+            os.makedirs(os.path.dirname(save_path), exist_ok=True)
+            
+            def on_chunk(chunk, downloaded, total):
+                if progress_callback:
+                    progress_callback(downloaded, total)
+            
+            resp = client.download(QQ_DOWNLOAD_URL, chunk_callback=on_chunk, timeout=300)
+            
+            if resp.status >= 400:
+                raise NetworkError(f"HTTP错误 {resp.status}")
+            
+            with open(save_path, 'wb') as f:
+                f.write(resp.data)
+            
+            logger.info(f"QQ安装程序下载成功: {save_path}")
+            return True
+            
+        except HttpTimeoutError:
+            raise TimeoutError(f"下载超时: {QQ_DOWNLOAD_URL}")
+        except HttpConnectionError as e:
+            raise NetworkError(f"网络连接失败: {e}")
+        except OSError as e:
+            raise NetworkError(f"文件保存失败: {e}")
+        except Exception as e:
+            raise NetworkError(f"下载失败: {e}")
 
     def download_app_update(self, save_path: str, 
                            progress_callback: Optional[Callable[[int, int], None]] = None) -> str:

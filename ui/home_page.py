@@ -1639,16 +1639,12 @@ class HomePage:
                 if reg_qq_path and reg_qq_path.exists():
                     qq_path = str(reg_qq_path)
                     logger.info(f"从注册表获取到QQ路径: {qq_path}")
-                    # 保存到配置
                     config["qq_path"] = qq_path
                     self.config_manager.save_config(config)
                 else:
                     logger.warning("未找到QQ路径")
-                    self._update_button_state(False)  # 恢复按钮状态
-                    self._show_error_dialog(
-                        "未找到QQ路径", 
-                        "未能自动检测到QQ安装路径，请在「启动配置」中手动指定QQ路径，或安装QQ后重试。"
-                    )
+                    self._update_button_state(False)
+                    self._show_qq_install_dialog(config)
                     return
             
             # 检查QQ路径是否真实存在
@@ -1935,6 +1931,122 @@ class HomePage:
         )
         
         self.page.open(error_dialog)
+    
+    def _show_qq_install_dialog(self, config: dict):
+        import logging
+        import threading
+        import subprocess
+        import tempfile
+        from utils.qq_path import get_win_reg_qq_path
+        logger = logging.getLogger(__name__)
+        
+        if not self.page:
+            return
+        
+        progress_bar = ft.ProgressBar(width=350, value=0, visible=False)
+        progress_text = ft.Text("", size=12, visible=False)
+        status_text = ft.Text("未检测到QQ安装，是否下载并安装QQ？", size=14)
+        
+        confirm_btn = ft.ElevatedButton("下载并安装")
+        cancel_btn = ft.TextButton("取消")
+        
+        qq_dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("未找到QQ", weight=ft.FontWeight.BOLD),
+            content=ft.Container(
+                content=ft.Column([
+                    status_text,
+                    ft.Container(height=10),
+                    progress_bar,
+                    progress_text,
+                ], tight=True),
+                width=400,
+            ),
+            actions=[cancel_btn, confirm_btn],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        
+        def do_download_and_install(e):
+            confirm_btn.disabled = True
+            cancel_btn.disabled = True
+            progress_bar.visible = True
+            progress_text.visible = True
+            status_text.value = "正在下载QQ安装程序..."
+            self.page.update()
+            
+            def download_task():
+                try:
+                    temp_dir = tempfile.gettempdir()
+                    qq_installer_path = os.path.join(temp_dir, "QQ_installer.exe")
+                    
+                    def on_progress(downloaded, total):
+                        if total > 0:
+                            percent = downloaded / total
+                            progress_bar.value = percent
+                            progress_text.value = f"{downloaded / 1024 / 1024:.1f} MB / {total / 1024 / 1024:.1f} MB ({percent * 100:.1f}%)"
+                        else:
+                            progress_text.value = f"已下载: {downloaded / 1024 / 1024:.1f} MB"
+                        try:
+                            self.page.update()
+                        except Exception:
+                            pass
+                    
+                    self.downloader.download_qq(qq_installer_path, progress_callback=on_progress)
+                    
+                    status_text.value = "下载完成，正在静默安装QQ..."
+                    progress_bar.value = None
+                    self.page.update()
+                    
+                    subprocess.run([qq_installer_path, "/S"], capture_output=True, timeout=300)
+                    
+                    try:
+                        os.unlink(qq_installer_path)
+                    except Exception:
+                        pass
+                    
+                    reg_qq_path = get_win_reg_qq_path()
+                    if reg_qq_path and reg_qq_path.exists():
+                        logger.info(f"QQ安装成功: {reg_qq_path}")
+                        self._close_dialog(qq_dialog)
+                        
+                        config["qq_path"] = str(reg_qq_path)
+                        self.config_manager.save_config(config)
+                        
+                        snackbar = ft.SnackBar(content=ft.Text("QQ安装成功！"), bgcolor=ft.Colors.GREEN_700)
+                        self.page.overlay.append(snackbar)
+                        snackbar.open = True
+                        self.page.update()
+                        
+                        self._on_global_start_click(None)
+                    else:
+                        raise Exception("安装完成但未能检测到QQ路径")
+                        
+                except subprocess.TimeoutExpired:
+                    logger.error("QQ安装超时")
+                    status_text.value = "安装超时，请手动安装QQ后重试"
+                    progress_bar.visible = False
+                    progress_text.visible = False
+                    confirm_btn.disabled = False
+                    cancel_btn.disabled = False
+                    self.page.update()
+                except Exception as ex:
+                    logger.error(f"QQ下载或安装失败: {ex}")
+                    status_text.value = f"安装失败: {ex}"
+                    progress_bar.visible = False
+                    progress_text.visible = False
+                    confirm_btn.disabled = False
+                    cancel_btn.disabled = False
+                    self.page.update()
+            
+            threading.Thread(target=download_task, daemon=True).start()
+        
+        def do_cancel(e):
+            self._close_dialog(qq_dialog)
+        
+        confirm_btn.on_click = do_download_and_install
+        cancel_btn.on_click = do_cancel
+        
+        self.page.open(qq_dialog)
     
     def _close_dialog(self, dialog):
         if self.page:
