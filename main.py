@@ -240,10 +240,10 @@ class LogCleaner:
         if app_log_dir.exists():
             cleanup_old_logs(app_log_dir, retention_seconds)
         
-        # 清空 LLOneBot 日志目录（直接删除所有文件）
-        llonebot_log_dir = self._app_dir / "bin" / "llonebot" / "data" / "logs"
-        if llonebot_log_dir.exists():
-            cleanup_llonebot_logs(llonebot_log_dir)
+        # 清空 LLBot 日志目录（直接删除所有文件）
+        llbot_log_dir = self._app_dir / "bin" / "llbot" / "data" / "logs"
+        if llbot_log_dir.exists():
+            cleanup_llbot_logs(llbot_log_dir)
 
 
 def cleanup_old_logs(log_dir: Path, retention_seconds: int):
@@ -299,24 +299,20 @@ def cleanup_old_logs(log_dir: Path, retention_seconds: int):
         print(f"清理日志目录失败: {e}")
 
 
-def cleanup_llonebot_logs(log_dir: Path):
-    """清空 LLOneBot 日志目录
-    
-    Args:
-        log_dir: LLOneBot 日志目录
-    """
+def cleanup_llbot_logs(log_dir: Path):
+    """清空 LLBot 日志目录"""
     try:
         for log_file in log_dir.glob('*'):
             try:
                 if log_file.is_file():
                     log_file.unlink()
-                    print(f"已删除 LLOneBot 日志: {log_file.name}")
+                    print(f"已删除 LLBot 日志: {log_file.name}")
             except PermissionError:
-                pass  # 文件被占用，跳过
+                pass
             except Exception as e:
-                print(f"清理 LLOneBot 日志失败 {log_file}: {e}")
+                print(f"清理 LLBot 日志失败 {log_file}: {e}")
     except Exception as e:
-        print(f"清理 LLOneBot 日志目录失败: {e}")
+        print(f"清理 LLBot 日志目录失败: {e}")
 
 
 def get_log_config() -> tuple:

@@ -71,18 +71,18 @@ class ConfigManager:
             return False, "配置必须是字典类型"
         
         # 检查必需字段
-        required_fields = ["qq_path", "pmhq_path", "llonebot_path", "node_path"]
+        required_fields = ["qq_path", "pmhq_path", "llbot_path", "node_path"]
         for field in required_fields:
             if field not in config:
                 return False, f"缺少必需字段: {field}"
         
         # 检查字段类型
-        string_fields = ["qq_path", "pmhq_path", "llonebot_path", "node_path", "log_level"]
+        string_fields = ["qq_path", "pmhq_path", "llbot_path", "node_path", "log_level"]
         for field in string_fields:
             if field in config and not isinstance(config[field], str):
                 return False, f"字段 {field} 必须是字符串类型"
         
-        bool_fields = ["auto_start_pmhq", "auto_start_llonebot", "auto_start_bot", "headless"]
+        bool_fields = ["auto_start_pmhq", "auto_start_llbot", "auto_start_bot", "headless"]
         for field in bool_fields:
             if field in config and not isinstance(config[field], bool):
                 return False, f"字段 {field} 必须是布尔类型"
@@ -91,7 +91,7 @@ class ConfigManager:
             return False, "字段 port 必须是整数类型"
         
         # 验证路径有效性（对于非空路径）
-        path_fields = ["qq_path", "pmhq_path", "llonebot_path", "node_path"]
+        path_fields = ["qq_path", "pmhq_path", "llbot_path", "node_path"]
         for field in path_fields:
             path_value = config.get(field, "")
             if path_value:  # 只验证非空路径
@@ -117,8 +117,8 @@ class ConfigManager:
             # Windows可执行文件应该是.exe
             if os.name == 'nt' and path_obj.suffix.lower() != '.exe':
                 return False, f"{field_name} 必须是.exe文件: {path}"
-        elif field_name == "llonebot_path":
-            # LLOneBot应该是.js文件
+        elif field_name == "llbot_path":
+            # LLBot应该是.js文件
             if path_obj.suffix.lower() != '.js':
                 return False, f"{field_name} 必须是.js文件: {path}"
         

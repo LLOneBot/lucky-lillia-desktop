@@ -119,7 +119,7 @@ class TestAboutPage:
         detector = Mock(spec=VersionDetector)
         detector.get_app_version.return_value = "1.0.0"
         detector.detect_pmhq_version.return_value = "2.0.0"
-        detector.detect_llonebot_version.return_value = "3.0.0"
+        detector.detect_llbot_version.return_value = "3.0.0"
         return detector
     
     @pytest.fixture
@@ -134,7 +134,7 @@ class TestAboutPage:
         manager = Mock(spec=ConfigManager)
         manager.load_config.return_value = {
             "pmhq_path": "pmhq.exe",
-            "llonebot_path": "llonebot.js"
+            "llbot_path": "llbot.js"
         }
         return manager
     
@@ -149,7 +149,7 @@ class TestAboutPage:
         assert isinstance(control, ft.Container)
         assert about_page.app_card is not None
         assert about_page.pmhq_card is not None
-        assert about_page.llonebot_card is not None
+        assert about_page.llbot_card is not None
     
     def test_load_versions(self, mock_version_detector, mock_update_checker, mock_config_manager):
         """测试加载版本信息"""
@@ -173,17 +173,17 @@ class TestAboutPage:
         # 等待异步线程完成（最多1秒）
         for _ in range(10):
             time.sleep(0.1)
-            if mock_version_detector.detect_pmhq_version.called and mock_version_detector.detect_llonebot_version.called:
+            if mock_version_detector.detect_pmhq_version.called and mock_version_detector.detect_llbot_version.called:
                 break
         
         # 验证版本检测器被调用
         mock_version_detector.get_app_version.assert_called_once()
         mock_version_detector.detect_pmhq_version.assert_called_once()
-        mock_version_detector.detect_llonebot_version.assert_called_once()
+        mock_version_detector.detect_llbot_version.assert_called_once()
         
         # 应用版本是同步加载的，应该立即更新
         assert about_page.app_card.current_version == "1.0.0"
-        # PMHQ和LLOneBot版本是异步加载的，由于run_task被mock，UI不会更新
+        # PMHQ和LLBot版本是异步加载的，由于run_task被mock，UI不会更新
         # 但版本检测器应该被调用
     
     def test_load_versions_without_config_manager(self, mock_version_detector, mock_update_checker):
@@ -194,7 +194,7 @@ class TestAboutPage:
         
         # 应该使用空路径调用版本检测
         mock_version_detector.detect_pmhq_version.assert_called_once_with("")
-        mock_version_detector.detect_llonebot_version.assert_called_once_with("")
+        mock_version_detector.detect_llbot_version.assert_called_once_with("")
     
     def test_check_update_button_exists(self, mock_version_detector, mock_update_checker):
         """测试检查更新按钮存在"""

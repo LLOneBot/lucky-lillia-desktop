@@ -45,10 +45,10 @@ def test_config_page_build(config_manager):
     # 验证输入字段已创建
     assert page.qq_path_field is not None
     assert page.pmhq_path_field is not None
-    assert page.llonebot_path_field is not None
+    assert page.llbot_path_field is not None
     assert page.node_path_field is not None
     assert page.auto_start_pmhq_checkbox is not None
-    assert page.auto_start_llonebot_checkbox is not None
+    assert page.auto_start_llbot_checkbox is not None
     assert page.log_level_dropdown is not None
     assert page.port_field is not None
 
@@ -60,12 +60,12 @@ def test_config_page_loads_default_config(config_manager):
     
     # 验证加载了默认配置
     assert page.pmhq_path_field.value == "bin/pmhq/pmhq-win-x64.exe"
-    assert page.llonebot_path_field.value == "bin/llonebot/llonebot.js"
-    assert page.node_path_field.value == "bin/llonebot/node.exe"
-    assert page.ffmpeg_path_field.value == "bin/llonebot/ffmpeg.exe"
-    assert page.ffprobe_path_field.value == "bin/llonebot/ffprobe.exe"
+    assert page.llbot_path_field.value == "bin/llbot/llbot.js"
+    assert page.node_path_field.value == "bin/llbot/node.exe"
+    assert page.ffmpeg_path_field.value == "bin/llbot/ffmpeg.exe"
+    assert page.ffprobe_path_field.value == "bin/llbot/ffprobe.exe"
     assert page.auto_start_pmhq_checkbox.value == False
-    assert page.auto_start_llonebot_checkbox.value == False
+    assert page.auto_start_llbot_checkbox.value == False
     assert page.log_level_dropdown.value == "info"
     assert page.port_field.value == "3000"
 
@@ -76,10 +76,10 @@ def test_config_page_loads_existing_config(config_manager):
     test_config = {
         "qq_path": "/path/to/qq.exe",
         "pmhq_path": "/path/to/pmhq.exe",
-        "llonebot_path": "/path/to/llonebot.js",
+        "llbot_path": "/path/to/llbot.js",
         "node_path": "/path/to/node.exe",
         "auto_start_pmhq": True,
-        "auto_start_llonebot": True,
+        "auto_start_llbot": True,
         "log_level": "debug",
         "port": 8080
     }
@@ -92,10 +92,10 @@ def test_config_page_loads_existing_config(config_manager):
     # 验证加载了保存的配置
     assert page.qq_path_field.value == "/path/to/qq.exe"
     assert page.pmhq_path_field.value == "/path/to/pmhq.exe"
-    assert page.llonebot_path_field.value == "/path/to/llonebot.js"
+    assert page.llbot_path_field.value == "/path/to/llbot.js"
     assert page.node_path_field.value == "/path/to/node.exe"
     assert page.auto_start_pmhq_checkbox.value == True
-    assert page.auto_start_llonebot_checkbox.value == True
+    assert page.auto_start_llbot_checkbox.value == True
     assert page.log_level_dropdown.value == "debug"
     assert page.port_field.value == "8080"
 
@@ -160,10 +160,10 @@ def test_config_page_refresh(config_manager):
     initial_config = {
         "qq_path": "/initial/qq.exe",
         "pmhq_path": "pmhq.exe",
-        "llonebot_path": "llonebot.js",
+        "llbot_path": "llbot.js",
         "node_path": "node.exe",
         "auto_start_pmhq": False,
-        "auto_start_llonebot": False,
+        "auto_start_llbot": False,
         "log_level": "info",
         "port": 3000
     }
@@ -204,7 +204,7 @@ def test_config_page_callback_on_save(config_manager):
     # 模拟保存配置
     page.qq_path_field.value = ""
     page.pmhq_path_field.value = "pmhq.exe"
-    page.llonebot_path_field.value = "llonebot.js"
+    page.llbot_path_field.value = "llbot.js"
     page.node_path_field.value = "node.exe"
     page.port_field.value = "3000"
     

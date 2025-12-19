@@ -142,15 +142,15 @@ class UpdateManager:
                     if pmhq_update.has_update:
                         updates_found.append(("PMHQ", pmhq_update))
             
-            if "llonebot" in versions and versions["llonebot"] and versions["llonebot"] != "未知":
-                llonebot_package = NPM_PACKAGES.get("llonebot")
-                llonebot_repo = GITHUB_REPOS.get("llonebot")
-                if llonebot_package:
-                    llonebot_update = self.update_checker.check_update(llonebot_package, versions["llonebot"], llonebot_repo)
-                    logger.info(f"LLOneBot更新检查: has_update={llonebot_update.has_update}, latest={llonebot_update.latest_version}")
-                    all_check_results.append(("LLOneBot", llonebot_update))
-                    if llonebot_update.has_update:
-                        updates_found.append(("LLOneBot", llonebot_update))
+            if "llbot" in versions and versions["llbot"] and versions["llbot"] != "未知":
+                llbot_package = NPM_PACKAGES.get("llbot")
+                llbot_repo = GITHUB_REPOS.get("llbot")
+                if llbot_package:
+                    llbot_update = self.update_checker.check_update(llbot_package, versions["llbot"], llbot_repo)
+                    logger.info(f"LLBot更新检查: has_update={llbot_update.has_update}, latest={llbot_update.latest_version}")
+                    all_check_results.append(("LLBot", llbot_update))
+                    if llbot_update.has_update:
+                        updates_found.append(("LLBot", llbot_update))
             
             with self._lock:
                 self._updates_found = updates_found
@@ -175,7 +175,7 @@ class UpdateManager:
     def has_running_processes(self) -> bool:
         return (
             self.process_manager.get_process_status("pmhq") == ProcessStatus.RUNNING or
-            self.process_manager.get_process_status("llonebot") == ProcessStatus.RUNNING or
+            self.process_manager.get_process_status("llbot") == ProcessStatus.RUNNING or
             self.process_manager.get_qq_pid() is not None
         )
     
@@ -249,13 +249,13 @@ class UpdateManager:
                         self.downloader.download_pmhq(save_path, make_progress_callback(component_name))
                         success_list.append(component_name)
                         
-                    elif component_name == "LLOneBot":
+                    elif component_name == "LLBot":
                         config = self.config_manager.load_config()
-                        llonebot_path = config.get("llonebot_path", "bin/llonebot/llonebot.js")
-                        save_path = llonebot_path.replace('.js', '.zip')
+                        llbot_path = config.get("llbot_path", "bin/llbot/llbot.js")
+                        save_path = llbot_path.replace('.js', '.zip')
                         if not save_path.endswith('.zip'):
-                            save_path = llonebot_path + '.zip'
-                        self.downloader.download_llonebot(save_path, make_progress_callback(component_name))
+                            save_path = llbot_path + '.zip'
+                        self.downloader.download_llbot(save_path, make_progress_callback(component_name))
                         success_list.append(component_name)
                         
                 except Exception as ex:

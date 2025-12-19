@@ -14,7 +14,7 @@ class MigrationManager:
     def __init__(self, app_dir: Path):
         self.app_dir = app_dir
         self.old_data_dir = app_dir / "data"
-        self.new_data_dir = app_dir / "bin" / "llonebot" / "data"
+        self.new_data_dir = app_dir / "bin" / "llbot" / "data"
     
     def check_migration_needed(self) -> Tuple[bool, List[str], bool, List[str], bool]:
         """Returns: (有旧数据, config文件列表, 需迁移token, database文件列表, 只需删除)"""

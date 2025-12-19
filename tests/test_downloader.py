@@ -171,11 +171,11 @@ class TestDownloader:
             assert "pmhq" in url
             assert ".tgz" in url
     
-    def test_get_llonebot_download_url(self, downloader):
-        """测试获取LLOneBot下载URL"""
+    def test_get_llbot_download_url(self, downloader):
+        """测试获取LLBot下载URL"""
         with patch('utils.downloader.get_package_tarball_url') as mock_tarball:
-            mock_tarball.return_value = "https://registry.npmmirror.com/llonebot/-/llonebot-3.0.0.tgz"
-            url = downloader.get_llonebot_download_url()
+            mock_tarball.return_value = "https://registry.npmmirror.com/llonebot-dist/-/llonebot-dist-3.0.0.tgz"
+            url = downloader.get_llbot_download_url()
             assert "llonebot" in url
             assert ".tgz" in url
     
@@ -195,14 +195,14 @@ class TestDownloader:
             assert "llonebot-ffmpeg-exe" in url
             assert ".tgz" in url
     
-    def test_download_llonebot_success(self, downloader, tmp_path):
-        """测试成功下载LLOneBot"""
-        save_path = tmp_path / "llonebot"
+    def test_download_llbot_success(self, downloader, tmp_path):
+        """测试成功下载LLBot"""
+        save_path = tmp_path / "llbot"
         
         # 创建一个有效的tgz文件内容
         package_dir = tmp_path / "package"
         package_dir.mkdir()
-        (package_dir / "llonebot.js").write_text("test")
+        (package_dir / "llbot.js").write_text("test")
         
         tgz_temp_path = tmp_path / "temp.tgz"
         with tarfile.open(tgz_temp_path, 'w:gz') as tar:
@@ -218,7 +218,7 @@ class TestDownloader:
         with patch('utils.downloader.requests.get') as mock_get, \
              patch('utils.downloader.get_package_tarball_url') as mock_tarball:
             
-            mock_tarball.return_value = "https://registry.npmmirror.com/llonebot/-/llonebot-3.0.0.tgz"
+            mock_tarball.return_value = "https://registry.npmmirror.com/llonebot-dist/-/llonebot-dist-3.0.0.tgz"
             
             mock_response = MagicMock()
             mock_response.headers = {'content-length': str(len(tgz_content))}
@@ -226,7 +226,7 @@ class TestDownloader:
             mock_response.iter_content = lambda chunk_size: [tgz_content]
             mock_get.return_value = mock_response
             
-            result = downloader.download_llonebot(str(save_path), progress_callback)
+            result = downloader.download_llbot(str(save_path), progress_callback)
             
             assert result is True
             assert len(progress_calls) >= 1

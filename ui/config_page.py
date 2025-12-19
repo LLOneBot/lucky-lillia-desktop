@@ -52,19 +52,19 @@ class ConfigPage:
             on_click=self._on_select_pmhq_path
         )
         
-        self.llonebot_path_field = ft.TextField(
-            label="LLOneBot路径",
-            hint_text="llonebot.js的路径",
-            value=self.current_config.get("llonebot_path", ""),
+        self.llbot_path_field = ft.TextField(
+            label="LLBot路径",
+            hint_text="llbot.js的路径",
+            value=self.current_config.get("llbot_path", ""),
             expand=True,
             read_only=False,
             disabled=False,
         )
         
-        self.llonebot_path_button = ft.IconButton(
+        self.llbot_path_button = ft.IconButton(
             icon=ft.Icons.FOLDER_OPEN,
             tooltip="选择文件",
-            on_click=self._on_select_llonebot_path
+            on_click=self._on_select_llbot_path
         )
         
         self.node_path_field = ft.TextField(
@@ -241,8 +241,8 @@ class ConfigPage:
                             self.pmhq_path_button,
                         ], spacing=8),
                         ft.Row([
-                            self.llonebot_path_field,
-                            self.llonebot_path_button,
+                            self.llbot_path_field,
+                            self.llbot_path_button,
                         ], spacing=8),
                         ft.Row([
                             self.node_path_field,
@@ -285,8 +285,8 @@ class ConfigPage:
         self.qq_path_field.disabled = False
         self.pmhq_path_field.read_only = False
         self.pmhq_path_field.disabled = False
-        self.llonebot_path_field.read_only = False
-        self.llonebot_path_field.disabled = False
+        self.llbot_path_field.read_only = False
+        self.llbot_path_field.disabled = False
         self.node_path_field.read_only = False
         self.node_path_field.disabled = False
         
@@ -333,11 +333,11 @@ class ConfigPage:
             initial_directory=initial_dir
         )
     
-    def _on_select_llonebot_path(self, e):
-        self._current_field = "llonebot_path"
-        initial_dir = self._get_initial_directory(self.llonebot_path_field.value)
+    def _on_select_llbot_path(self, e):
+        self._current_field = "llbot_path"
+        initial_dir = self._get_initial_directory(self.llbot_path_field.value)
         self.file_picker.pick_files(
-            dialog_title="选择LLOneBot脚本文件",
+            dialog_title="选择LLBot脚本文件",
             allowed_extensions=["js"],
             allow_multiple=False,
             initial_directory=initial_dir
@@ -363,9 +363,9 @@ class ConfigPage:
             elif self._current_field == "pmhq_path":
                 self.pmhq_path_field.value = selected_path
                 self.pmhq_path_field.update()
-            elif self._current_field == "llonebot_path":
-                self.llonebot_path_field.value = selected_path
-                self.llonebot_path_field.update()
+            elif self._current_field == "llbot_path":
+                self.llbot_path_field.value = selected_path
+                self.llbot_path_field.update()
             elif self._current_field == "node_path":
                 self.node_path_field.value = selected_path
                 self.node_path_field.update()
@@ -382,7 +382,7 @@ class ConfigPage:
         try:
             config["qq_path"] = self.qq_path_field.value.strip()
             config["pmhq_path"] = self.pmhq_path_field.value.strip()
-            config["llonebot_path"] = self.llonebot_path_field.value.strip()
+            config["llbot_path"] = self.llbot_path_field.value.strip()
             config["node_path"] = self.node_path_field.value.strip()
             config["auto_login_qq"] = self.auto_login_qq_field.value.strip()
             config["auto_start_bot"] = self.auto_start_bot_checkbox.value
@@ -452,7 +452,7 @@ class ConfigPage:
             
             self.qq_path_field.value = self.current_config.get("qq_path", "")
             self.pmhq_path_field.value = self.current_config.get("pmhq_path", "")
-            self.llonebot_path_field.value = self.current_config.get("llonebot_path", "")
+            self.llbot_path_field.value = self.current_config.get("llbot_path", "")
             self.node_path_field.value = self.current_config.get("node_path", "")
             self.auto_login_qq_field.value = self.current_config.get("auto_login_qq", "")
             self.auto_start_bot_checkbox.value = self.current_config.get("auto_start_bot", False)

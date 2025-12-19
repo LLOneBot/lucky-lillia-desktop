@@ -393,7 +393,7 @@ class LogPreviewCard:
                         text_ctrl.color = ft.Colors.ON_SURFACE
                         icon_ctrl.name = ft.Icons.INFO_OUTLINE
                         icon_ctrl.color = ft.Colors.BLUE_600
-                    if process_name == "LLOneBot":
+                    if process_name == "LLBot":
                         text_ctrl.value = message
                     else:
                         text_ctrl.value = f"[{timestamp}] [{process_name}] {message}"
@@ -434,8 +434,8 @@ class HomePage:
         self.page = None
         self.download_dialog = None
         self.is_downloading = False
-        self.download_llonebot_dialog = None
-        self.is_downloading_llonebot = False
+        self.download_llbot_dialog = None
+        self.is_downloading_llbot = False
         self.download_node_dialog = None
         self.is_downloading_node = False
         self.download_ffmpeg_dialog = None
@@ -460,7 +460,7 @@ class HomePage:
         
     def build(self):
         """构建UI组件"""
-        # 创建进程资源卡片（Bot占用整合了管理器、PMHQ、LLOneBot）
+        # 创建进程资源卡片（Bot占用整合了管理器、PMHQ、LLBot）
         self.bot_card = ProcessResourceCard(
             "bot",
             "Bot占用",
@@ -518,7 +518,7 @@ class HomePage:
         
         # 创建下载对话框
         self._build_download_dialog()
-        self._build_llonebot_download_dialog()
+        self._build_llbot_download_dialog()
         self._build_node_download_dialog()
         self._build_ffmpeg_download_dialog()
         self._build_ffprobe_download_dialog()
@@ -645,8 +645,8 @@ class HomePage:
             actions_alignment=ft.MainAxisAlignment.END,
         )
     
-    def _build_llonebot_download_dialog(self):
-        self.llonebot_download_progress_bar = ft.ProgressBar(
+    def _build_llbot_download_dialog(self):
+        self.llbot_download_progress_bar = ft.ProgressBar(
             value=0,
             width=400,
             height=10,
@@ -654,44 +654,44 @@ class HomePage:
             bgcolor=ft.Colors.BLUE_100,
         )
         
-        self.llonebot_download_progress_text = ft.Text(
+        self.llbot_download_progress_text = ft.Text(
             "准备下载...",
             size=14,
             text_align=ft.TextAlign.CENTER,
         )
         
-        self.llonebot_download_status_text = ft.Text(
+        self.llbot_download_status_text = ft.Text(
             "0 MB / 0 MB (0%)",
             size=13,
             color=ft.Colors.GREY_700,
             text_align=ft.TextAlign.CENTER,
         )
         
-        self.llonebot_download_cancel_button = ft.TextButton(
+        self.llbot_download_cancel_button = ft.TextButton(
             "取消",
-            on_click=self._on_llonebot_download_cancel_click,
+            on_click=self._on_llbot_download_cancel_click,
         )
         
-        self.download_llonebot_dialog = ft.AlertDialog(
+        self.download_llbot_dialog = ft.AlertDialog(
             modal=True,
-            title=ft.Text("下载LLOneBot"),
+            title=ft.Text("下载LLBot"),
             content=ft.Container(
                 content=ft.Column([
                     ft.Text(
-                        "LLOneBot文件不存在，需要下载。",
+                        "LLBot文件不存在，需要下载。",
                         size=14,
                     ),
                     ft.Container(height=20),
-                    self.llonebot_download_progress_text,
+                    self.llbot_download_progress_text,
                     ft.Container(height=10),
-                    self.llonebot_download_progress_bar,
+                    self.llbot_download_progress_bar,
                     ft.Container(height=10),
-                    self.llonebot_download_status_text,
+                    self.llbot_download_status_text,
                 ], tight=True, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
                 width=450,
             ),
             actions=[
-                self.llonebot_download_cancel_button,
+                self.llbot_download_cancel_button,
             ],
             actions_alignment=ft.MainAxisAlignment.END,
         )
@@ -854,7 +854,7 @@ class HomePage:
         logger = logging.getLogger(__name__)
         logger.info("全局启动按钮被点击")
         
-        if self.is_downloading or self.is_downloading_llonebot or self.is_downloading_node or self.is_downloading_ffmpeg or self.is_downloading_ffprobe:
+        if self.is_downloading or self.is_downloading_llbot or self.is_downloading_node or self.is_downloading_ffmpeg or self.is_downloading_ffprobe:
             logger.info("正在下载中，忽略点击")
             return
         
@@ -884,12 +884,12 @@ class HomePage:
             return
         
         pmhq_path = config.get("pmhq_path", DEFAULT_CONFIG["pmhq_path"])
-        llonebot_path = config.get("llonebot_path", DEFAULT_CONFIG["llonebot_path"])
+        llbot_path = config.get("llbot_path", DEFAULT_CONFIG["llbot_path"])
         node_path = config.get("node_path", DEFAULT_CONFIG["node_path"])
         ffmpeg_path = config.get("ffmpeg_path", DEFAULT_CONFIG["ffmpeg_path"])
         ffprobe_path = config.get("ffprobe_path", DEFAULT_CONFIG["ffprobe_path"])
         logger.info(f"PMHQ路径: {pmhq_path}")
-        logger.info(f"LLOneBot路径: {llonebot_path}")
+        logger.info(f"LLBot路径: {llbot_path}")
         logger.info(f"Node.exe路径: {node_path}")
         logger.info(f"FFmpeg.exe路径: {ffmpeg_path}")
         logger.info(f"FFprobe.exe路径: {ffprobe_path}")
@@ -898,20 +898,17 @@ class HomePage:
         pmhq_exists = self.downloader.check_file_exists(pmhq_path)
         logger.info(f"PMHQ文件存在: {pmhq_exists}")
         
-        # 检查Node.exe文件是否存在（先检查配置路径，再检查环境变量，最后检查bin/llonebot/node.exe）
+        # 检查Node.exe文件是否存在（先检查配置路径，再检查环境变量，最后检查bin/llbot/node.exe）
         # 同时检查版本是否 >= 22
         node_exists = self.downloader.check_file_exists(node_path)
         if node_exists:
-            # 检查版本
             if not self.downloader.check_node_version_valid(node_path):
                 logger.warning(f"配置路径的Node.js版本低于22: {node_path}")
                 node_exists = False
         
         if not node_exists:
-            # 尝试从环境变量查找
             system_node = self.downloader.check_node_available()
             if system_node:
-                # 检查版本是否 >= 22
                 if self.downloader.check_node_version_valid(system_node):
                     logger.info(f"在系统PATH中找到Node.js (版本>=22): {system_node}")
                     node_exists = True
@@ -921,20 +918,17 @@ class HomePage:
                     logger.warning(f"系统PATH中的Node.js版本低于22: {system_node}")
             
             if not node_exists:
-                # 检查 bin/llonebot/node.exe
-                local_node_path = "bin/llonebot/node.exe"
+                local_node_path = "bin/llbot/node.exe"
                 if self.downloader.check_file_exists(local_node_path):
-                    # 本地下载的node不需要检查版本（我们下载的肯定是新版）
                     logger.info(f"在本地目录找到Node.js: {local_node_path}")
                     node_exists = True
                     config["node_path"] = local_node_path
                     self.config_manager.save_config(config)
         logger.info(f"Node.exe可用: {node_exists}")
         
-        # 检查FFmpeg.exe文件是否存在（先检查配置路径，再检查环境变量，最后检查bin/llonebot/ffmpeg.exe）
+        # 检查FFmpeg.exe文件是否存在（先检查配置路径，再检查环境变量，最后检查bin/llbot/ffmpeg.exe）
         ffmpeg_exists = self.downloader.check_file_exists(ffmpeg_path)
         if not ffmpeg_exists:
-            # 尝试从环境变量查找
             system_ffmpeg = self.downloader.check_ffmpeg_available()
             if system_ffmpeg:
                 logger.info(f"在系统PATH中找到FFmpeg: {system_ffmpeg}")
@@ -942,8 +936,7 @@ class HomePage:
                 config["ffmpeg_path"] = system_ffmpeg
                 self.config_manager.save_config(config)
             else:
-                # 检查 bin/llonebot/ffmpeg.exe
-                local_ffmpeg_path = "bin/llonebot/ffmpeg.exe"
+                local_ffmpeg_path = "bin/llbot/ffmpeg.exe"
                 if self.downloader.check_file_exists(local_ffmpeg_path):
                     logger.info(f"在本地目录找到FFmpeg: {local_ffmpeg_path}")
                     ffmpeg_exists = True
@@ -951,10 +944,9 @@ class HomePage:
                     self.config_manager.save_config(config)
         logger.info(f"FFmpeg.exe可用: {ffmpeg_exists}")
         
-        # 检查FFprobe.exe文件是否存在（先检查配置路径，再检查环境变量，最后检查bin/llonebot/ffprobe.exe）
+        # 检查FFprobe.exe文件是否存在（先检查配置路径，再检查环境变量，最后检查bin/llbot/ffprobe.exe）
         ffprobe_exists = self.downloader.check_file_exists(ffprobe_path)
         if not ffprobe_exists:
-            # 尝试从环境变量查找
             system_ffprobe = self.downloader.check_ffprobe_available()
             if system_ffprobe:
                 logger.info(f"在系统PATH中找到FFprobe: {system_ffprobe}")
@@ -962,8 +954,7 @@ class HomePage:
                 config["ffprobe_path"] = system_ffprobe
                 self.config_manager.save_config(config)
             else:
-                # 检查 bin/llonebot/ffprobe.exe
-                local_ffprobe_path = "bin/llonebot/ffprobe.exe"
+                local_ffprobe_path = "bin/llbot/ffprobe.exe"
                 if self.downloader.check_file_exists(local_ffprobe_path):
                     logger.info(f"在本地目录找到FFprobe: {local_ffprobe_path}")
                     ffprobe_exists = True
@@ -971,9 +962,9 @@ class HomePage:
                     self.config_manager.save_config(config)
         logger.info(f"FFprobe.exe可用: {ffprobe_exists}")
         
-        # 检查LLOneBot文件是否存在
-        llonebot_exists = self.downloader.check_file_exists(llonebot_path)
-        logger.info(f"LLOneBot文件存在: {llonebot_exists}")
+        # 检查LLBot文件是否存在
+        llbot_exists = self.downloader.check_file_exists(llbot_path)
+        logger.info(f"LLBot文件存在: {llbot_exists}")
         
         if not pmhq_exists:
             logger.info("PMHQ文件不存在，显示下载对话框")
@@ -984,9 +975,9 @@ class HomePage:
         elif not ffmpeg_exists or not ffprobe_exists:
             logger.info("FFmpeg/FFprobe不可用，显示下载对话框")
             self._show_ffmpeg_download_dialog()
-        elif not llonebot_exists:
-            logger.info("LLOneBot文件不存在，显示下载对话框")
-            self._show_llonebot_download_dialog()
+        elif not llbot_exists:
+            logger.info("LLBot文件不存在，显示下载对话框")
+            self._show_llbot_download_dialog()
         else:
             logger.info("所有文件存在，直接启动服务")
             self._start_all_services()
@@ -1082,11 +1073,11 @@ class HomePage:
                     if not ffmpeg_exists or not ffprobe_exists:
                         self._show_ffmpeg_download_dialog()
                     else:
-                        llonebot_path = config.get("llonebot_path", DEFAULT_CONFIG["llonebot_path"])
-                        llonebot_exists = self.downloader.check_file_exists(llonebot_path)
+                        llbot_path = config.get("llbot_path", DEFAULT_CONFIG["llbot_path"])
+                        llbot_exists = self.downloader.check_file_exists(llbot_path)
                         
-                        if not llonebot_exists:
-                            self._show_llonebot_download_dialog()
+                        if not llbot_exists:
+                            self._show_llbot_download_dialog()
                         else:
                             self._start_all_services()
             
@@ -1111,103 +1102,101 @@ class HomePage:
         if self.page:
             self.page.close(self.download_dialog)
     
-    def _show_llonebot_download_dialog(self):
+    def _show_llbot_download_dialog(self):
         import logging
         logger = logging.getLogger(__name__)
-        logger.info("显示LLOneBot下载对话框")
+        logger.info("显示LLBot下载对话框")
         
         if not self.page:
             logger.error("页面引用为空，无法显示对话框")
             return
         
-        self.llonebot_download_progress_bar.value = 0
-        self.llonebot_download_progress_text.value = "准备下载..."
-        self.llonebot_download_status_text.value = "0 MB / 0 MB (0%)"
-        self.llonebot_download_cancel_button.disabled = False
-        self.llonebot_download_cancel_button.text = "取消"
-        self.is_downloading_llonebot = True
+        self.llbot_download_progress_bar.value = 0
+        self.llbot_download_progress_text.value = "准备下载..."
+        self.llbot_download_status_text.value = "0 MB / 0 MB (0%)"
+        self.llbot_download_cancel_button.disabled = False
+        self.llbot_download_cancel_button.text = "取消"
+        self.is_downloading_llbot = True
         
-        self.page.open(self.download_llonebot_dialog)
-        logger.info("LLOneBot下载对话框已显示")
+        self.page.open(self.download_llbot_dialog)
+        logger.info("LLBot下载对话框已显示")
         
         import threading
-        download_thread = threading.Thread(target=self._download_llonebot)
+        download_thread = threading.Thread(target=self._download_llbot)
         download_thread.daemon = True
         download_thread.start()
-        logger.info("LLOneBot下载线程已启动")
+        logger.info("LLBot下载线程已启动")
     
-    def _download_llonebot(self):
+    def _download_llbot(self):
         import logging
         logger = logging.getLogger(__name__)
-        logger.info("开始下载LLOneBot")
+        logger.info("开始下载LLBot")
         
         try:
             config = self.config_manager.load_config()
-            llonebot_path = config.get("llonebot_path", DEFAULT_CONFIG["llonebot_path"])
-            # 下载zip文件
-            llonebot_zip_path = llonebot_path.replace('.js', '.zip')
-            # 如果路径中没有.js，则直接添加.zip
-            if not llonebot_zip_path.endswith('.zip'):
-                llonebot_zip_path = llonebot_path + '.zip'
-            logger.info(f"下载目标路径: {llonebot_zip_path}")
+            llbot_path = config.get("llbot_path", DEFAULT_CONFIG["llbot_path"])
+            llbot_zip_path = llbot_path.replace('.js', '.zip')
+            if not llbot_zip_path.endswith('.zip'):
+                llbot_zip_path = llbot_path + '.zip'
+            logger.info(f"下载目标路径: {llbot_zip_path}")
             
-            llonebot_dir = os.path.dirname(llonebot_zip_path)
-            if llonebot_dir and not os.path.exists(llonebot_dir):
-                logger.info(f"创建目录: {llonebot_dir}")
-                os.makedirs(llonebot_dir, exist_ok=True)
+            llbot_dir = os.path.dirname(llbot_zip_path)
+            if llbot_dir and not os.path.exists(llbot_dir):
+                logger.info(f"创建目录: {llbot_dir}")
+                os.makedirs(llbot_dir, exist_ok=True)
             
             def progress_callback(downloaded: int, total: int):
-                if not self.is_downloading_llonebot:
+                if not self.is_downloading_llbot:
                     raise DownloadError("下载已取消")
                 
                 if total > 0:
                     progress = downloaded / total
-                    self.llonebot_download_progress_bar.value = progress
+                    self.llbot_download_progress_bar.value = progress
                     
                     downloaded_mb = downloaded / 1024 / 1024
                     total_mb = total / 1024 / 1024
                     percentage = int(progress * 100)
                     
-                    self.llonebot_download_progress_text.value = f"正在下载... {percentage}%"
-                    self.llonebot_download_status_text.value = f"{downloaded_mb:.1f} MB / {total_mb:.1f} MB ({percentage}%)"
+                    self.llbot_download_progress_text.value = f"正在下载... {percentage}%"
+                    self.llbot_download_status_text.value = f"{downloaded_mb:.1f} MB / {total_mb:.1f} MB ({percentage}%)"
                     
                     self._safe_update()
             
-            success = self.downloader.download_llonebot(llonebot_zip_path, progress_callback)
+            success = self.downloader.download_llbot(llbot_zip_path, progress_callback)
             
-            if success and self.is_downloading_llonebot:
-                self.llonebot_download_progress_text.value = "下载完成！"
-                self.llonebot_download_cancel_button.text = "关闭"
+            if success and self.is_downloading_llbot:
+                self.llbot_download_progress_text.value = "下载完成！"
+                self.llbot_download_cancel_button.text = "关闭"
                 self._safe_update()
                 
                 import time
                 time.sleep(1)
                 
                 if self.page:
-                    self.page.close(self.download_llonebot_dialog)
+                    self.page.close(self.download_llbot_dialog)
                 
                 self._start_all_services()
             
         except DownloadError as ex:
-            if self.is_downloading_llonebot:
-                self.llonebot_download_progress_text.value = "下载失败"
-                self.llonebot_download_status_text.value = str(ex)
-                self.llonebot_download_cancel_button.text = "关闭"
+            if self.is_downloading_llbot:
+                self.llbot_download_progress_text.value = "下载失败"
+                self.llbot_download_status_text.value = str(ex)
+                self.llbot_download_cancel_button.text = "关闭"
                 self._safe_update()
         except Exception as ex:
-            if self.is_downloading_llonebot:
-                self.llonebot_download_progress_text.value = "下载失败"
-                self.llonebot_download_status_text.value = f"错误: {str(ex)}"
-                self.llonebot_download_cancel_button.text = "关闭"
+            if self.is_downloading_llbot:
+                self.llbot_download_progress_text.value = "下载失败"
+                self.llbot_download_status_text.value = f"错误: {str(ex)}"
+                self.llbot_download_cancel_button.text = "关闭"
                 self._safe_update()
         finally:
-            self.is_downloading_llonebot = False
+            self.is_downloading_llbot = False
     
-    def _on_llonebot_download_cancel_click(self, e):
-        self.is_downloading_llonebot = False
-        self._update_button_state(False)  # 恢复按钮状态
+    def _on_llbot_download_cancel_click(self, e):
+        self.is_downloading_llbot = False
+        self._update_button_state(False)
         if self.page:
-            self.page.close(self.download_llonebot_dialog)
+            self.page.close(self.download_llbot_dialog)
     
     def _show_node_download_dialog(self):
         import logging
@@ -1288,11 +1277,11 @@ class HomePage:
                 if not ffmpeg_exists or not ffprobe_exists:
                     self._show_ffmpeg_download_dialog()
                 else:
-                    llonebot_path = config.get("llonebot_path", DEFAULT_CONFIG["llonebot_path"])
-                    llonebot_exists = self.downloader.check_file_exists(llonebot_path)
+                    llbot_path = config.get("llbot_path", DEFAULT_CONFIG["llbot_path"])
+                    llbot_exists = self.downloader.check_file_exists(llbot_path)
                     
-                    if not llonebot_exists:
-                        self._show_llonebot_download_dialog()
+                    if not llbot_exists:
+                        self._show_llbot_download_dialog()
                     else:
                         self._start_all_services()
             
@@ -1439,11 +1428,11 @@ class HomePage:
                     self.page.close(self.download_ffmpeg_dialog)
                 
                 config = self.config_manager.load_config()
-                llonebot_path = config.get("llonebot_path", DEFAULT_CONFIG["llonebot_path"])
-                llonebot_exists = self.downloader.check_file_exists(llonebot_path)
+                llbot_path = config.get("llbot_path", DEFAULT_CONFIG["llbot_path"])
+                llbot_exists = self.downloader.check_file_exists(llbot_path)
                 
-                if not llonebot_exists:
-                    self._show_llonebot_download_dialog()
+                if not llbot_exists:
+                    self._show_llbot_download_dialog()
                 else:
                     self._start_all_services()
             
@@ -1590,11 +1579,11 @@ class HomePage:
                     self.page.close(self.download_ffprobe_dialog)
                 
                 config = self.config_manager.load_config()
-                llonebot_path = config.get("llonebot_path", DEFAULT_CONFIG["llonebot_path"])
-                llonebot_exists = self.downloader.check_file_exists(llonebot_path)
+                llbot_path = config.get("llbot_path", DEFAULT_CONFIG["llbot_path"])
+                llbot_exists = self.downloader.check_file_exists(llbot_path)
                 
-                if not llonebot_exists:
-                    self._show_llonebot_download_dialog()
+                if not llbot_exists:
+                    self._show_llbot_download_dialog()
                 else:
                     self._start_all_services()
             
@@ -1677,15 +1666,14 @@ class HomePage:
                     # 无头模式下，使用HTTP API进行登录
                     if headless:
                         self._handle_headless_login(auto_login_qq, config)
-                        return  # 登录流程会继续启动LLOneBot
+                        return  # 登录流程会继续启动LLBot
                 else:
                     logger.error("PMHQ启动失败")
-                    self._update_button_state(False)  # 恢复按钮状态
+                    self._update_button_state(False)
                     self._show_error_dialog("启动失败", "PMHQ启动失败")
                     return
             
-            # 继续启动LLOneBot
-            self._start_llonebot_service(config)
+            self._start_llbot_service(config)
             
         except Exception as ex:
             logger.error(f"启动服务失败: {ex}")
@@ -1733,12 +1721,10 @@ class HomePage:
                         break
                 
                 if target_account:
-                    # 尝试快速登录
                     result = login_service.quick_login(auto_login_qq)
                     if result.success:
                         logger.info(f"快速登录成功: {auto_login_qq}")
-                        # 等待登录完成，然后启动LLOneBot
-                        self._wait_for_login_and_start_llonebot(config)
+                        self._wait_for_login_and_start_llbot(config)
                         return
                     else:
                         logger.warning(f"快速登录失败: {result.error_msg}")
@@ -1760,12 +1746,7 @@ class HomePage:
         thread = threading.Thread(target=login_thread, daemon=True)
         thread.start()
     
-    def _wait_for_login_and_start_llonebot(self, config: dict):
-        """等待登录完成并启动LLOneBot
-        
-        Args:
-            config: 配置字典
-        """
+    def _wait_for_login_and_start_llbot(self, config: dict):
         import logging
         import threading
         import time
@@ -1787,7 +1768,7 @@ class HomePage:
             }
             
             client = HttpClient(timeout=5)
-            max_attempts = 60  # 最多等待60秒
+            max_attempts = 60
             for _ in range(max_attempts):
                 try:
                     resp = client.post(url, json_data=payload, timeout=5)
@@ -1798,11 +1779,10 @@ class HomePage:
                             uin = result.get("uin")
                             if uin:
                                 logger.info(f"登录完成，uin: {uin}")
-                                # 在主线程中启动LLOneBot
-                                async def start_llonebot():
-                                    self._start_llonebot_service(config)
+                                async def start_llbot():
+                                    self._start_llbot_service(config)
                                 if self.page:
-                                    self.page.run_task(start_llonebot)
+                                    self.page.run_task(start_llbot)
                                 return
                 except Exception:
                     pass
@@ -1826,8 +1806,7 @@ class HomePage:
             import logging
             logger = logging.getLogger(__name__)
             logger.info(f"登录成功: {uin}")
-            # 启动LLOneBot
-            self._start_llonebot_service(config)
+            self._start_llbot_service(config)
         
         def on_cancel():
             import logging
@@ -1861,58 +1840,46 @@ class HomePage:
         # 然后显示登录对话框
         self._show_login_dialog(pmhq_port, config)
     
-    def _start_llonebot_service(self, config: dict):
-        """启动LLOneBot服务
-        
-        Args:
-            config: 配置字典
-        """
+    def _start_llbot_service(self, config: dict):
         import logging
         logger = logging.getLogger(__name__)
         
         node_path = config.get("node_path", DEFAULT_CONFIG["node_path"])
-        llonebot_path = config.get("llonebot_path", DEFAULT_CONFIG["llonebot_path"])
+        llbot_path = config.get("llbot_path", DEFAULT_CONFIG["llbot_path"])
         
-        # 检查node是否可用（配置路径 -> 环境变量 -> bin/llonebot/node.exe）
-        # 同时检查版本是否 >= 22
+        # 检查node是否可用（配置路径 -> 环境变量 -> bin/llbot/node.exe）
         node_available = self.downloader.check_file_exists(node_path)
         if node_available and not self.downloader.check_node_version_valid(node_path):
             logger.warning(f"配置路径的Node.js版本低于22: {node_path}")
             node_available = False
         
         if not node_available:
-            # 尝试从环境变量查找
             system_node = self.downloader.check_node_available()
             if system_node and self.downloader.check_node_version_valid(system_node):
                 node_path = system_node
                 node_available = True
             else:
-                # 检查 bin/llonebot/node.exe
-                local_node_path = "bin/llonebot/node.exe"
+                local_node_path = "bin/llbot/node.exe"
                 if self.downloader.check_file_exists(local_node_path):
                     node_path = local_node_path
                     node_available = True
         
-        if node_available and self.downloader.check_file_exists(llonebot_path):
-            logger.info(f"正在启动LLOneBot: node={node_path}, script={llonebot_path}")
-            llbot_success = self.process_manager.start_llonebot(node_path, llonebot_path)
+        if node_available and self.downloader.check_file_exists(llbot_path):
+            logger.info(f"正在启动LLBot: node={node_path}, script={llbot_path}")
+            llbot_success = self.process_manager.start_llbot(node_path, llbot_path)
             if llbot_success:
-                llbot_pid = self.process_manager.get_pid("llonebot")
-                logger.info(f"LLOneBot启动成功，PID: {llbot_pid}")
-                # 将LLOneBot进程附加到日志收集器
+                llbot_pid = self.process_manager.get_pid("llbot")
+                logger.info(f"LLBot启动成功，PID: {llbot_pid}")
                 if self.log_collector:
-                    llbot_process = self.process_manager.get_process("llonebot")
+                    llbot_process = self.process_manager.get_process("llbot")
                     if llbot_process:
-                        self.log_collector.attach_process("LLOneBot", llbot_process)
-                        logger.info("LLOneBot进程已附加到日志收集器")
+                        self.log_collector.attach_process("LLBot", llbot_process)
+                        logger.info("LLBot进程已附加到日志收集器")
             else:
-                logger.error("LLOneBot启动失败")
-                self._show_error_dialog("启动失败", "LLOneBot启动失败")
+                logger.error("LLBot启动失败")
+                self._show_error_dialog("启动失败", "LLBot启动失败")
         
-        # 更新按钮状态为"停止"
         self._update_button_state(True)
-        
-        # 刷新进程资源显示
         self.refresh_process_resources()
         if self.page:
             self.page.update()
@@ -2116,19 +2083,19 @@ class HomePage:
                     pmhq_running = True
                     logger.debug(f"PMHQ - PID: {pmhq_pid}, CPU: {cpu:.1f}%, 内存: {mem:.1f}MB")
             
-            # LLOneBot
-            llonebot_pid = pids.get("llonebot")
-            llonebot_running = False
-            if llonebot_pid:
-                cpu, mem = self._get_process_resources(llonebot_pid)
+            # LLBot
+            llbot_pid = pids.get("llbot")
+            llbot_running = False
+            if llbot_pid:
+                cpu, mem = self._get_process_resources(llbot_pid)
                 if cpu > 0 or mem > 0:
                     total_cpu += cpu
                     total_mem += mem
-                    llonebot_running = True
-                    logger.debug(f"LLOneBot - PID: {llonebot_pid}, CPU: {cpu:.1f}%, 内存: {mem:.1f}MB")
+                    llbot_running = True
+                    logger.debug(f"LLBot - PID: {llbot_pid}, CPU: {cpu:.1f}%, 内存: {mem:.1f}MB")
             
-            # Bot运行状态：PMHQ和LLOneBot都启动才算运行中
-            bot_running = pmhq_running and llonebot_running
+            # Bot运行状态：PMHQ和LLBot都启动才算运行中
+            bot_running = pmhq_running and llbot_running
             logger.debug(f"Bot总占用 - CPU: {total_cpu:.1f}%, 内存: {total_mem:.1f}MB, 运行中: {bot_running}")
             
             # 更新Bot占用卡片
@@ -2190,14 +2157,8 @@ class HomePage:
         pass
     
     def clear_update_banner(self, component: str = None):
-        """清除更新横幅
-        
-        Args:
-            component: 要清除的组件名称（"app"/"pmhq"/"llonebot"），如果为None则清除所有
-        """
         if component:
-            # 从更新列表中移除指定组件
-            component_map = {"app": "管理器", "pmhq": "PMHQ", "llonebot": "LLOneBot"}
+            component_map = {"app": "管理器", "pmhq": "PMHQ", "llbot": "LLBot"}
             display_name = component_map.get(component, component)
             self._updates_found = [(name, info) for name, info in self._updates_found if name != display_name]
             
@@ -2216,7 +2177,6 @@ class HomePage:
             self.page.update()
     
     def check_for_updates(self):
-        """检查管理器、PMHQ和LLOneBot更新（进入控制面板时调用）"""
         import logging
         logger = logging.getLogger(__name__)
         
@@ -2226,9 +2186,7 @@ class HomePage:
         
         logger.info("开始检查组件更新...")
         
-        # 设置回调
         def on_check_complete(all_check_results):
-            # 只过滤出真正有更新的组件（has_update=True）
             updates_found = [(name, info) for name, info in all_check_results if info.has_update]
             if updates_found:
                 update_names = [name for name, _ in updates_found]
@@ -2247,15 +2205,14 @@ class HomePage:
         
         self.update_manager.set_callbacks(on_check_complete=on_check_complete)
         
-        # 获取版本信息
         config = self.config_manager.load_config()
         pmhq_path = config.get("pmhq_path", "")
-        llonebot_path = config.get("llonebot_path", "")
+        llbot_path = config.get("llbot_path", "")
         
         versions = {
             "app": self.version_detector.get_app_version(),
             "pmhq": self.version_detector.detect_pmhq_version(pmhq_path),
-            "llonebot": self.version_detector.detect_llonebot_version(llonebot_path)
+            "llbot": self.version_detector.detect_llbot_version(llbot_path)
         }
         
         # 异步检查更新

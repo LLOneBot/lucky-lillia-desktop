@@ -43,7 +43,7 @@ class ProcessManager:
         self._admin_pids: Dict[str, int] = {}
         self._status: Dict[str, ProcessStatus] = {
             "pmhq": ProcessStatus.STOPPED,
-            "llonebot": ProcessStatus.STOPPED
+            "llbot": ProcessStatus.STOPPED
         }
         self._lock = threading.Lock()
         self._monitor_thread: Optional[threading.Thread] = None
@@ -376,33 +376,33 @@ class ProcessManager:
             logger.error(f"查找进程PID时发生异常: {e}")
         return None
     
-    def start_llonebot(self, node_path: str, script_path: str) -> bool:
-        """启动LLOneBot进程
+    def start_llbot(self, node_path: str, script_path: str) -> bool:
+        """启动LLBot进程
         
         Args:
             node_path: node.exe的路径
-            script_path: llonebot.js的路径
+            script_path: llbot.js的路径
             
         Returns:
             启动成功返回True，失败返回False
         """
-        logger.info(f"尝试启动LLOneBot: node={node_path}, script={script_path}")
+        logger.info(f"尝试启动LLBot: node={node_path}, script={script_path}")
         
         with self._lock:
             # 检查是否已经在运行
-            if self._status.get("llonebot") == ProcessStatus.RUNNING:
-                logger.info("LLOneBot已经在运行中")
+            if self._status.get("llbot") == ProcessStatus.RUNNING:
+                logger.info("LLBot已经在运行中")
                 return True
             
             # 验证可执行文件和脚本路径
             if not os.path.isfile(node_path):
                 logger.error(f"Node.js可执行文件不存在: {node_path}")
-                self._status["llonebot"] = ProcessStatus.ERROR
+                self._status["llbot"] = ProcessStatus.ERROR
                 return False
             
             if not os.path.isfile(script_path):
-                logger.error(f"LLOneBot脚本文件不存在: {script_path}")
-                self._status["llonebot"] = ProcessStatus.ERROR
+                logger.error(f"LLBot脚本文件不存在: {script_path}")
+                self._status["llbot"] = ProcessStatus.ERROR
                 return False
             
             # 获取绝对路径
@@ -415,7 +415,7 @@ class ProcessManager:
             logger.info(f"工作目录: {working_dir}")
             
             try:
-                self._status["llonebot"] = ProcessStatus.STARTING
+                self._status["llbot"] = ProcessStatus.STARTING
                 
                 # 启动进程，添加 --enable-source-maps 启用JS源码映射，添加 --pmhq-port 参数传递PMHQ端口
                 cmd = [abs_node_path, "--enable-source-maps", abs_script_path]
@@ -450,15 +450,15 @@ class ProcessManager:
                 if return_code is not None:
                     # 进程已经退出，启动失败
                     stdout, stderr = process.communicate(timeout=1)
-                    logger.error(f"LLOneBot进程立即退出，返回码: {return_code}")
-                    logger.error(f"LLOneBot stdout: {stdout}")
-                    logger.error(f"LLOneBot stderr: {stderr}")
-                    self._status["llonebot"] = ProcessStatus.ERROR
+                    logger.error(f"LLBot进程立即退出，返回码: {return_code}")
+                    logger.error(f"LLBot stdout: {stdout}")
+                    logger.error(f"LLBot stderr: {stderr}")
+                    self._status["llbot"] = ProcessStatus.ERROR
                     return False
                 
-                self._processes["llonebot"] = process
-                self._status["llonebot"] = ProcessStatus.RUNNING
-                logger.info(f"LLOneBot启动成功，PID: {process.pid}")
+                self._processes["llbot"] = process
+                self._status["llbot"] = ProcessStatus.RUNNING
+                logger.info(f"LLBot启动成功，PID: {process.pid}")
                 
                 # 启动监控线程
                 self._start_monitoring()
@@ -466,15 +466,15 @@ class ProcessManager:
                 return True
                 
             except (OSError, subprocess.SubprocessError) as e:
-                logger.error(f"启动LLOneBot时发生异常: {e}", exc_info=True)
-                self._status["llonebot"] = ProcessStatus.ERROR
+                logger.error(f"启动LLBot时发生异常: {e}", exc_info=True)
+                self._status["llbot"] = ProcessStatus.ERROR
                 return False
     
     def stop_process(self, process_name: str) -> bool:
         """停止指定进程
         
         Args:
-            process_name: 进程名称 ("pmhq" 或 "llonebot")
+            process_name: 进程名称 ("pmhq" 或 "llbot")
             
         Returns:
             停止成功返回True，失败返回False
@@ -586,7 +586,7 @@ class ProcessManager:
         """获取进程状态
         
         Args:
-            process_name: 进程名称 ("pmhq" 或 "llonebot")
+            process_name: 进程名称 ("pmhq" 或 "llbot")
         
         Returns:
             ProcessStatus枚举值 (RUNNING, STOPPED, ERROR)
@@ -670,8 +670,8 @@ class ProcessManager:
             if self._status.get("pmhq") == ProcessStatus.RUNNING:
                 all_stopped = False
             
-            # 检查LLOneBot状态
-            if self._status.get("llonebot") == ProcessStatus.RUNNING:
+            # 检查LLBot状态
+            if self._status.get("llbot") == ProcessStatus.RUNNING:
                 all_stopped = False
             
             # 检查普通进程
@@ -969,7 +969,7 @@ class ProcessManager:
         """获取进程的PID
         
         Args:
-            process_name: 进程名称 ("pmhq" 或 "llonebot")
+            process_name: 进程名称 ("pmhq" 或 "llbot")
             
         Returns:
             进程PID，如果进程不存在或已停止返回None
@@ -1004,7 +1004,7 @@ class ProcessManager:
         """
         with self._lock:
             pids = {}
-            for name in ["pmhq", "llonebot"]:
+            for name in ["pmhq", "llbot"]:
                 # 先检查普通进程
                 process = self._processes.get(name)
                 if process and process.poll() is None:

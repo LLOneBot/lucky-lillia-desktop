@@ -89,7 +89,7 @@ class TestUpdateChecker:
         
         versions = {
             "pmhq": "1.0.0",
-            "llonebot": "2.0.0",
+            "llbot": "2.0.0",
             "app": "1.0.0"
         }
         
@@ -100,8 +100,8 @@ class TestUpdateChecker:
                 "dist": {},
                 "repository": {}
             },
-            "llonebot": {
-                "name": "llonebot",
+            "llbot": {
+                "name": "llbot",
                 "version": "2.0.0",
                 "dist": {},
                 "repository": {}
@@ -120,13 +120,13 @@ class TestUpdateChecker:
         # 明确传递packages参数
         packages = {
             "pmhq": "pmhq",
-            "llonebot": "llonebot",
+            "llbot": "llbot",
             "app": "lucky-lillia-desktop"
         }
         
         repos = {
             "pmhq": "linyuchen/pmhq",
-            "llonebot": "LLOneBot/LLOneBot",
+            "llbot": "LLOneBot/LLOneBot",
             "app": "LLOneBot/lucky-lillia-desktop"
         }
         
@@ -135,7 +135,7 @@ class TestUpdateChecker:
         
         assert len(results) == 3
         assert results["pmhq"].has_update is True
-        assert results["llonebot"].has_update is False
+        assert results["llbot"].has_update is False
         assert results["app"].has_update is True
     
     def test_version_comparison_with_prerelease(self):

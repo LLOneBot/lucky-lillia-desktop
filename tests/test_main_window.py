@@ -81,9 +81,9 @@ def test_main_window_navigation_indices(mock_managers):
     main_window.config_page.control = Mock()
     main_window.config_page.refresh = Mock()
     
-    main_window.llonebot_config_page = Mock()
-    main_window.llonebot_config_page.control = Mock()
-    main_window.llonebot_config_page.refresh = Mock()
+    main_window.llbot_config_page = Mock()
+    main_window.llbot_config_page.control = Mock()
+    main_window.llbot_config_page.refresh = Mock()
     
     main_window.about_page = Mock()
     main_window.about_page.control = Mock()
@@ -105,10 +105,10 @@ def test_main_window_navigation_indices(mock_managers):
     assert main_window.current_page_index == 2
     main_window.config_page.refresh.assert_called_once()
     
-    # 测试导航到LLOneBot配置页
+    # 测试导航到LLBot配置页
     main_window._navigate_to(3)
     assert main_window.current_page_index == 3
-    main_window.llonebot_config_page.refresh.assert_called_once()
+    main_window.llbot_config_page.refresh.assert_called_once()
     
     # 测试导航到关于页
     main_window._navigate_to(4)

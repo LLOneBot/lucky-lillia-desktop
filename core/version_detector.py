@@ -63,7 +63,7 @@ class VersionDetector:
                 
         return None
     
-    def detect_llonebot_version(self, script_path: str) -> Optional[str]:
+    def detect_llbot_version(self, script_path: str) -> Optional[str]:
         if not script_path or not os.path.exists(script_path):
             return None
             
@@ -81,7 +81,7 @@ class VersionDetector:
             except (json.JSONDecodeError, OSError):
                 pass
         
-        # 方法2: 尝试从 llonebot.js 文件头读取版本注释
+        # 方法2: 尝试从 llbot.js 文件头读取版本注释
         try:
             with open(script_path, 'r', encoding='utf-8') as f:
                 for _ in range(20):

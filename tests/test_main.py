@@ -209,7 +209,7 @@ class TestProcessManager:
         
         pm = ProcessManager()
         assert pm.get_pid("pmhq") is None
-        assert pm.get_pid("llonebot") is None
+        assert pm.get_pid("llbot") is None
     
     def test_get_all_pids_returns_dict(self):
         """测试get_all_pids返回字典"""
@@ -220,9 +220,9 @@ class TestProcessManager:
         
         assert isinstance(pids, dict)
         assert "pmhq" in pids
-        assert "llonebot" in pids
+        assert "llbot" in pids
         assert pids["pmhq"] is None
-        assert pids["llonebot"] is None
+        assert pids["llbot"] is None
     
     def test_get_process_status_default_stopped(self):
         """测试默认进程状态为STOPPED"""
@@ -230,7 +230,7 @@ class TestProcessManager:
         
         pm = ProcessManager()
         assert pm.get_process_status("pmhq") == ProcessStatus.STOPPED
-        assert pm.get_process_status("llonebot") == ProcessStatus.STOPPED
+        assert pm.get_process_status("llbot") == ProcessStatus.STOPPED
     
     def test_stop_all_handles_empty_processes(self):
         """测试stop_all处理空进程列表"""

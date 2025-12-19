@@ -1,4 +1,4 @@
-"""LLOneBot配置页面"""
+"""LLBot配置页面"""
 
 import flet as ft
 import json
@@ -7,7 +7,7 @@ import copy
 from typing import Optional, Callable, Dict, Any, List
 
 
-class LLOneBotConfigPage:
+class LLBotConfigPage:
     DEFAULT_CONFIG = {
         "webui": {"enable": True, "port": 3080},
         "satori": {"enable": False, "port": 5600, "token": ""},
@@ -62,7 +62,7 @@ class LLOneBotConfigPage:
         uin = self.get_uin_func()
         if not uin:
             return None
-        return os.path.join("bin", "llonebot", "data", f"config_{uin}.json")
+        return os.path.join("bin", "llbot", "data", f"config_{uin}.json")
     
     def _load_config(self) -> Dict[str, Any]:
         config_path = self._get_config_path()
@@ -230,7 +230,7 @@ class LLOneBotConfigPage:
             self.error_text, self.success_text,
         ], spacing=16, visible=bool(self.get_uin_func()))
         
-        # 主界面内容（所有内容放在一个Column里）
+        # 主界面内容
         main_content = ft.Column([
             ft.Row([ft.Icon(ft.Icons.TUNE, size=36, color=ft.Colors.PRIMARY),
                     ft.Text("LLBot 配置", size=32, weight=ft.FontWeight.BOLD)], spacing=12),
@@ -239,7 +239,6 @@ class LLOneBotConfigPage:
             self.config_content,
         ], spacing=16)
         
-        # 可滚动容器（和启动配置页一样的结构）
         scrollable_content = ft.Container(
             content=ft.ListView(
                 controls=[main_content],
@@ -250,7 +249,6 @@ class LLOneBotConfigPage:
             expand=True,
         )
         
-        # 使用Stack叠加内容和悬浮按钮
         self.control = ft.Stack([
             scrollable_content,
             self.floating_buttons,
@@ -276,19 +274,16 @@ class LLOneBotConfigPage:
         
         connects = self.current_config.get("ob11", {}).get("connect", [])
         
-        # 添加每个连接的标签
         for i, conn in enumerate(connects):
             conn_type = conn.get("type", "ws")
             tab_name = self.TYPE_NAMES.get(conn_type, conn_type)
             controls = self._build_connect_controls(conn, i)
             self.connect_controls.append(controls)
             
-            # 构建行，过滤掉None值
             row1 = [c for c in [controls["enable"], controls.get("port"), controls.get("url")] if c]
             row2 = [c for c in [controls.get("heart"), controls.get("enable_heart"), controls["token"]] if c]
             row3 = [controls["msg_format"], controls["report_self"], controls["report_offline"], controls["debug"]]
             
-            # 删除按钮
             delete_btn = ft.TextButton(
                 "删除此连接", icon=ft.Icons.DELETE,
                 style=ft.ButtonStyle(color=ft.Colors.RED_400),
@@ -308,7 +303,6 @@ class LLOneBotConfigPage:
                 )
             ))
         
-        # 最后添加 "+" 标签用于添加新连接
         self.connects_tabs.tabs.append(ft.Tab(
             text="+",
             content=ft.Container(
@@ -409,7 +403,6 @@ class LLOneBotConfigPage:
         self.current_config["ob11"]["connect"].append(new_conn)
         
         self._rebuild_tabs()
-        # 切换到新添加的标签（倒数第二个，因为最后一个是"+"）
         self.connects_tabs.selected_index = len(self.connects_tabs.tabs) - 2
         self._try_update()
     
@@ -418,7 +411,6 @@ class LLOneBotConfigPage:
         if 0 <= index < len(connects):
             connects.pop(index)
             self._rebuild_tabs()
-            # 调整选中索引
             if connects:
                 self.connects_tabs.selected_index = min(index, len(connects) - 1)
             else:
@@ -544,7 +536,6 @@ class LLOneBotConfigPage:
         self.current_config = self._load_config()
         self._update_ui()
         self._rebuild_tabs()
-        # 根据是否有UIN切换显示
         self.no_uin_container.visible = not has_uin
         self.config_content.visible = has_uin
         self.floating_buttons.visible = has_uin

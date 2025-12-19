@@ -174,8 +174,8 @@ class Downloader:
         package_name = NPM_PACKAGES.get("pmhq", "pmhq")
         return self._get_npm_tarball_url(package_name)
 
-    def get_llonebot_download_url(self) -> str:
-        package_name = NPM_PACKAGES.get("llonebot", "llonebot")
+    def get_llbot_download_url(self) -> str:
+        package_name = NPM_PACKAGES.get("llbot", "llonebot")
         return self._get_npm_tarball_url(package_name)
 
     def get_node_download_url(self) -> str:
@@ -203,10 +203,10 @@ class Downloader:
         except Exception as e:
             raise NetworkError(f"下载失败: {e}")
 
-    def download_llonebot(self, save_path: str, 
+    def download_llbot(self, save_path: str, 
                          progress_callback: Optional[Callable[[int, int], None]] = None) -> bool:
         try:
-            tarball_url = self.get_llonebot_download_url()
+            tarball_url = self.get_llbot_download_url()
             
             if save_path.endswith('.zip'):
                 extract_dir = os.path.dirname(save_path)
@@ -214,7 +214,7 @@ class Downloader:
                 extract_dir = os.path.dirname(save_path) if os.path.isfile(save_path) else save_path
             
             if not extract_dir:
-                extract_dir = "bin/llonebot"
+                extract_dir = "bin/llbot"
             
             return self._download_and_extract_tarball(tarball_url, extract_dir, progress_callback)
             
@@ -228,8 +228,8 @@ class Downloader:
         try:
             tarball_url = self.get_node_download_url()
             
-            # 强制下载到 bin/llonebot 目录，跳过 package.json 避免覆盖 llonebot 的配置
-            extract_dir = "bin/llonebot"
+            # 强制下载到 bin/llbot 目录，跳过 package.json 避免覆盖 llbot 的配置
+            extract_dir = "bin/llbot"
             
             return self._download_and_extract_tarball(
                 tarball_url, extract_dir, progress_callback, 
@@ -250,8 +250,8 @@ class Downloader:
         try:
             tarball_url = self.get_ffmpeg_download_url()
             
-            # 强制下载到 bin/llonebot 目录，跳过 package.json 避免覆盖 llonebot 的配置
-            extract_dir = "bin/llonebot"
+            # 强制下载到 bin/llbot 目录，跳过 package.json 避免覆盖 llbot 的配置
+            extract_dir = "bin/llbot"
             
             return self._download_and_extract_tarball(
                 tarball_url, extract_dir, progress_callback,

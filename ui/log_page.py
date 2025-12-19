@@ -161,8 +161,8 @@ class LogPage:
     def _format_log_entry(self, entry: LogEntry) -> str:
         """格式化日志条目"""
         prefix = "ERR" if entry.level == "stderr" else "   "
-        # LLOneBot 日志已包含时间戳，只显示前缀和原始消息
-        if entry.process_name == "LLOneBot":
+        # LLBot 日志已包含时间戳，只显示前缀和原始消息
+        if entry.process_name == "LLBot":
             return f"{prefix} {entry.message}"
         
         timestamp = entry.timestamp.strftime("%H:%M:%S")

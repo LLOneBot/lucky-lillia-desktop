@@ -154,8 +154,8 @@ class AboutPage:
         self.pmhq_card = VersionInfoCard("pmhq", "PMHQ")
         self.pmhq_card.build()
         
-        self.llonebot_card = VersionInfoCard("llonebot", "LLOneBot")
-        self.llonebot_card.build()
+        self.llbot_card = VersionInfoCard("llbot", "LLBot")
+        self.llbot_card.build()
         
         # 检查更新/立即更新按钮
         self.check_update_button = ft.ElevatedButton(
@@ -189,7 +189,7 @@ class AboutPage:
                 display_name = {
                     "app": 'Lucky Lillia Desktop',
                     "pmhq": "PMHQ",
-                    "llonebot": "LLOneBot"
+                    "llbot": "LLBot"
                 }.get(component, component)
                 
                 github_links.append(
@@ -223,7 +223,7 @@ class AboutPage:
                                 ft.Column([
                                     ft.Text(APP_NAME, size=28, weight=ft.FontWeight.BOLD),
                                     ft.Text(
-                                        "QQ机器人管理工具 - 统一管理PMHQ和LLOneBot",
+                                        "LuckyLilliaDesktop - 幸运莉莉娅桌面端",
                                         size=15, color=ft.Colors.GREY_600, weight=ft.FontWeight.W_500
                                     ),
                                 ], spacing=8),
@@ -245,7 +245,7 @@ class AboutPage:
                 
                 ft.Row([
                     ft.Container(content=self.pmhq_card.control, expand=1),
-                    ft.Container(content=self.llonebot_card.control, expand=1),
+                    ft.Container(content=self.llbot_card.control, expand=1),
                 ], spacing=20),
                 
                 # 检查更新按钮（居中对齐）
@@ -286,28 +286,28 @@ class AboutPage:
         self.app_card.update_version(app_version)
         
         self.pmhq_card.update_version("检测中...")
-        self.llonebot_card.update_version("检测中...")
+        self.llbot_card.update_version("检测中...")
         
         if self.page:
             self.page.update()
         
         def load_versions_async():
             pmhq_path = ""
-            llonebot_path = ""
+            llbot_path = ""
             if self.config_manager:
                 try:
                     config = self.config_manager.load_config()
                     pmhq_path = config.get("pmhq_path", "")
-                    llonebot_path = config.get("llonebot_path", "")
+                    llbot_path = config.get("llbot_path", "")
                 except Exception:
                     pass
             
             pmhq_version = self.version_detector.detect_pmhq_version(pmhq_path)
-            llonebot_version = self.version_detector.detect_llonebot_version(llonebot_path)
+            llbot_version = self.version_detector.detect_llbot_version(llbot_path)
             
             async def update_ui():
                 self.pmhq_card.update_version(pmhq_version if pmhq_version else "未知")
-                self.llonebot_card.update_version(llonebot_version if llonebot_version else "未知")
+                self.llbot_card.update_version(llbot_version if llbot_version else "未知")
                 if self.page:
                     self.page.update()
             
@@ -338,7 +338,7 @@ class AboutPage:
         
         self.app_card.clear_update_status()
         self.pmhq_card.clear_update_status()
-        self.llonebot_card.clear_update_status()
+        self.llbot_card.clear_update_status()
         self.update_manager.clear_all_updates()
         
         if self.page:
@@ -351,8 +351,8 @@ class AboutPage:
                         self.app_card.update_check_result(info)
                     elif name == "PMHQ":
                         self.pmhq_card.update_check_result(info)
-                    elif name == "LLOneBot":
-                        self.llonebot_card.update_check_result(info)
+                    elif name == "LLBot":
+                        self.llbot_card.update_check_result(info)
                 
                 self.check_update_button.disabled = False
                 self.loading_indicator.visible = False
@@ -376,7 +376,7 @@ class AboutPage:
         versions = {
             "app": self.app_card.current_version,
             "pmhq": self.pmhq_card.current_version,
-            "llonebot": self.llonebot_card.current_version,
+            "llbot": self.llbot_card.current_version,
         }
         
         self.update_manager.check_updates_async(versions)
@@ -394,8 +394,8 @@ class AboutPage:
                 self.app_card.update_check_result(update_info)
             elif component_name == "PMHQ":
                 self.pmhq_card.update_check_result(update_info)
-            elif component_name == "LLOneBot":
-                self.llonebot_card.update_check_result(update_info)
+            elif component_name == "LLBot":
+                self.llbot_card.update_check_result(update_info)
         
         if self.page:
             try:
@@ -503,7 +503,7 @@ class AboutPage:
                 
                 self.app_card.clear_update_status()
                 self.pmhq_card.clear_update_status()
-                self.llonebot_card.clear_update_status()
+                self.llbot_card.clear_update_status()
                 
                 if self.page:
                     self.page.update()
@@ -587,8 +587,8 @@ class AboutPage:
                     self.app_card.update_check_result(info)
                 elif name == "PMHQ":
                     self.pmhq_card.update_check_result(info)
-                elif name == "LLOneBot":
-                    self.llonebot_card.update_check_result(info)
+                elif name == "LLBot":
+                    self.llbot_card.update_check_result(info)
         else:
             self.check_update_button.text = "检查更新"
             self.check_update_button.icon = ft.Icons.CLOUD_DOWNLOAD

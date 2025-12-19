@@ -25,9 +25,9 @@ def test_log_page_filter_change():
     log_page._set_filter("pmhq")
     assert log_page.current_filter == "pmhq"
     
-    # 测试切换到llonebot过滤器
-    log_page._set_filter("llonebot")
-    assert log_page.current_filter == "llonebot"
+    # 测试切换到llbot过滤器
+    log_page._set_filter("llbot")
+    assert log_page.current_filter == "llbot"
     
     # 测试切换回all过滤器
     log_page._set_filter("all")
@@ -57,7 +57,7 @@ def test_log_page_displays_logs():
     )
     entry2 = LogEntry(
         timestamp=datetime.now(),
-        process_name="llonebot",
+        process_name="llbot",
         level="stderr",
         message="Test message 2"
     )
@@ -85,9 +85,9 @@ def test_log_page_filter_by_process():
     )
     entry2 = LogEntry(
         timestamp=datetime.now(),
-        process_name="llonebot",
+        process_name="llbot",
         level="stdout",
-        message="LLOneBot message"
+        message="LLBot message"
     )
     entry3 = LogEntry(
         timestamp=datetime.now(),
@@ -107,8 +107,8 @@ def test_log_page_filter_by_process():
     log_page._set_filter("pmhq")
     assert len(log_page.log_column.controls) == 2
     
-    # 过滤只显示llonebot
-    log_page._set_filter("llonebot")
+    # 过滤只显示llbot
+    log_page._set_filter("llbot")
     assert len(log_page.log_column.controls) == 1
     
     # 显示所有
@@ -154,9 +154,9 @@ def test_log_page_clear_filtered_logs():
     )
     entry2 = LogEntry(
         timestamp=datetime.now(),
-        process_name="llonebot",
+        process_name="llbot",
         level="stdout",
-        message="LLOneBot message"
+        message="LLBot message"
     )
     
     log_collector._logs.append(entry1)
@@ -169,7 +169,7 @@ def test_log_page_clear_filtered_logs():
     log_page.current_filter = "pmhq"
     log_page._on_clear_logs(None)
     
-    # 只有llonebot日志应该保留
+    # 只有llbot日志应该保留
     all_logs = log_collector.get_logs()
     assert len(all_logs) == 1
-    assert all_logs[0].process_name == "llonebot"
+    assert all_logs[0].process_name == "llbot"

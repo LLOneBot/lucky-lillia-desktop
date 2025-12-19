@@ -11,7 +11,7 @@ from core.update_manager import UpdateManager
 from ui.home_page import HomePage
 from ui.log_page import LogPage
 from ui.config_page import ConfigPage
-from ui.llonebot_config_page import LLOneBotConfigPage
+from ui.llbot_config_page import LLBotConfigPage
 from ui.about_page import AboutPage
 from ui.theme import apply_theme, toggle_theme, get_current_theme_mode
 from utils.constants import (
@@ -126,10 +126,10 @@ class MainWindow:
         )
         self.config_page.build()
         
-        self.llonebot_config_page = LLOneBotConfigPage(
+        self.llbot_config_page = LLBotConfigPage(
             get_uin_func=self.process_manager.get_uin
         )
-        self.llonebot_config_page.build()
+        self.llbot_config_page.build()
         
         self.about_page = AboutPage(
             self.version_detector,
@@ -300,8 +300,8 @@ class MainWindow:
             self.content_area.content = self.config_page.control
             self.config_page.refresh()
         elif index == 3:
-            self.content_area.content = self.llonebot_config_page.control
-            self.llonebot_config_page.refresh()
+            self.content_area.content = self.llbot_config_page.control
+            self.llbot_config_page.refresh()
         elif index == 4:
             self.content_area.content = self.about_page.control
             self.about_page.refresh()

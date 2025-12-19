@@ -67,7 +67,7 @@ def test_log_preview_update_with_logs():
         },
         {
             "timestamp": "2024-01-01 12:00:01",
-            "process_name": "llonebot",
+            "process_name": "llbot",
             "level": "stderr",
             "message": "Test message 2"
         }

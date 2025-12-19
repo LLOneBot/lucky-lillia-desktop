@@ -31,7 +31,7 @@ def test_get_all_logs():
     )
     entry2 = LogEntry(
         timestamp=datetime.now(),
-        process_name="llonebot",
+        process_name="llbot",
         level="stderr",
         message="Message 2"
     )
@@ -58,9 +58,9 @@ def test_get_logs_by_process():
     )
     entry2 = LogEntry(
         timestamp=datetime.now(),
-        process_name="llonebot",
+        process_name="llbot",
         level="stdout",
-        message="LLOneBot message"
+        message="LLBot message"
     )
     entry3 = LogEntry(
         timestamp=datetime.now(),
@@ -78,10 +78,10 @@ def test_get_logs_by_process():
     assert len(pmhq_logs) == 2
     assert all(log.process_name == "pmhq" for log in pmhq_logs)
     
-    # 获取llonebot日志
-    llonebot_logs = collector.get_logs("llonebot")
-    assert len(llonebot_logs) == 1
-    assert llonebot_logs[0].process_name == "llonebot"
+    # 获取llbot日志
+    llbot_logs = collector.get_logs("llbot")
+    assert len(llbot_logs) == 1
+    assert llbot_logs[0].process_name == "llbot"
 
 
 def test_clear_all_logs():
@@ -116,9 +116,9 @@ def test_clear_logs_by_process():
     )
     entry2 = LogEntry(
         timestamp=datetime.now(),
-        process_name="llonebot",
+        process_name="llbot",
         level="stdout",
-        message="LLOneBot message"
+        message="LLBot message"
     )
     entry3 = LogEntry(
         timestamp=datetime.now(),
@@ -134,10 +134,10 @@ def test_clear_logs_by_process():
     # 清空pmhq日志
     collector.clear_logs("pmhq")
     
-    # 只有llonebot日志应该保留
+    # 只有llbot日志应该保留
     remaining_logs = collector.get_logs()
     assert len(remaining_logs) == 1
-    assert remaining_logs[0].process_name == "llonebot"
+    assert remaining_logs[0].process_name == "llbot"
 
 
 def test_callback_registration():
