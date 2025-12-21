@@ -849,6 +849,7 @@ class HomePage:
     
     def _on_global_start_click(self, e):
         import logging
+        import shutil
         from datetime import datetime
         from core.log_collector import LogEntry
         logger = logging.getLogger(__name__)
@@ -857,6 +858,17 @@ class HomePage:
         if self.is_downloading or self.is_downloading_llbot or self.is_downloading_node or self.is_downloading_ffmpeg or self.is_downloading_ffprobe:
             logger.info("正在下载中，忽略点击")
             return
+        
+        # 迁移旧版 llonebot 数据目录到 llbot
+        old_data_dir = Path("bin/llonebot/data")
+        new_data_dir = Path("bin/llbot/data")
+        if old_data_dir.exists() and not new_data_dir.exists():
+            try:
+                new_data_dir.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copytree(old_data_dir, new_data_dir)
+                logger.info(f"已迁移数据目录: {old_data_dir} -> {new_data_dir}")
+            except Exception as ex:
+                logger.warning(f"迁移数据目录失败: {ex}")
         
         # 立即更新按钮状态为"已启动"，提供即时反馈
         self._update_button_state(True)

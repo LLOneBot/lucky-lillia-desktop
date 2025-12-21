@@ -16,7 +16,7 @@ class LLBotConfigPage:
             "enable": False,
             "reportSelfMessage": False,
             "http": {"port": 3010, "prefix": "", "accessToken": ""},
-            "webhook": {"urls": []}
+            "webhook": {"urls": [], "accessToken": ""}
         },
         "enableLocalFile2Url": False,
         "log": True,
@@ -130,7 +130,9 @@ class LLBotConfigPage:
             value=milky_cfg.get("http", {}).get("prefix", ""))
         self.milky_http_token = ft.TextField(label="AccessToken", width=200,
             value=milky_cfg.get("http", {}).get("accessToken", ""))
-        # Webhook URLs 动态列表
+        # Webhook
+        self.milky_webhook_token = ft.TextField(label="Webhook AccessToken", width=200,
+            value=milky_cfg.get("webhook", {}).get("accessToken", ""))
         self.milky_webhook_url_controls: List[ft.TextField] = []
         self.milky_webhook_container = ft.Column(spacing=8)
         self._rebuild_webhook_urls(milky_cfg.get("webhook", {}).get("urls", []))
@@ -212,12 +214,16 @@ class LLBotConfigPage:
                 ft.Container(
                     content=ft.Column([
                         ft.Row([
+                            ft.Text("Webhook", size=14, weight=ft.FontWeight.W_500),
+                            self.milky_webhook_token,
+                        ], spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                        ft.Row([
                             ft.Text("Webhook URLs", size=14, weight=ft.FontWeight.W_500),
                             ft.IconButton(icon=ft.Icons.ADD_CIRCLE, tooltip="添加URL",
                                           on_click=self._on_add_webhook_url, icon_size=20),
-                        ], spacing=8),
+                        ], spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER),
                         self.milky_webhook_container,
-                    ], spacing=4),
+                    ], spacing=8),
                 ),
             ]),
             self._section("其他配置", ft.Icons.MORE_HORIZ, [
@@ -466,7 +472,8 @@ class LLBotConfigPage:
                         "accessToken": self.milky_http_token.value or ""
                     },
                     "webhook": {
-                        "urls": self._collect_webhook_urls()
+                        "urls": self._collect_webhook_urls(),
+                        "accessToken": self.milky_webhook_token.value or ""
                     }
                 },
                 "enableLocalFile2Url": self.enable_local_file2url.value,
@@ -502,6 +509,7 @@ class LLBotConfigPage:
         self.milky_http_port.value = str(milky_cfg.get("http", {}).get("port", 3010))
         self.milky_http_prefix.value = milky_cfg.get("http", {}).get("prefix", "")
         self.milky_http_token.value = milky_cfg.get("http", {}).get("accessToken", "")
+        self.milky_webhook_token.value = milky_cfg.get("webhook", {}).get("accessToken", "")
         self._rebuild_webhook_urls(milky_cfg.get("webhook", {}).get("urls", []))
         self.enable_local_file2url.value = cfg.get("enableLocalFile2Url", False)
         self.log_enable.value = cfg.get("log", True)
