@@ -2057,15 +2057,17 @@ class HomePage:
         """获取进程的 CPU 和内存使用情况
         
         Returns:
-            (cpu_percent, memory_mb) 或 (0.0, 0.0) 如果获取失败
+            (cpu_percent, memory_mb, is_running) 或 (0.0, 0.0, False) 如果进程不存在
         """
         try:
             proc = psutil.Process(pid)
+            if not proc.is_running():
+                return 0.0, 0.0, False
             cpu = proc.cpu_percent(interval=0.05)
             mem = proc.memory_info().rss / 1024 / 1024
-            return cpu, mem
+            return cpu, mem, True
         except (psutil.NoSuchProcess, psutil.AccessDenied):
-            return 0.0, 0.0
+            return 0.0, 0.0, False
     
     def refresh_process_resources(self):
         import logging
@@ -2077,7 +2079,7 @@ class HomePage:
             
             # 管理器自身
             manager_pid = os.getpid()
-            cpu, mem = self._get_process_resources(manager_pid)
+            cpu, mem, _ = self._get_process_resources(manager_pid)
             total_cpu += cpu
             total_mem += mem
             logger.debug(f"管理器 - PID: {manager_pid}, CPU: {cpu:.1f}%, 内存: {mem:.1f}MB")
@@ -2088,22 +2090,20 @@ class HomePage:
             pmhq_pid = pids.get("pmhq")
             pmhq_running = False
             if pmhq_pid:
-                cpu, mem = self._get_process_resources(pmhq_pid)
-                if cpu > 0 or mem > 0:
+                cpu, mem, pmhq_running = self._get_process_resources(pmhq_pid)
+                if pmhq_running:
                     total_cpu += cpu
                     total_mem += mem
-                    pmhq_running = True
                     logger.debug(f"PMHQ - PID: {pmhq_pid}, CPU: {cpu:.1f}%, 内存: {mem:.1f}MB")
             
             # LLBot
             llbot_pid = pids.get("llbot")
             llbot_running = False
             if llbot_pid:
-                cpu, mem = self._get_process_resources(llbot_pid)
-                if cpu > 0 or mem > 0:
+                cpu, mem, llbot_running = self._get_process_resources(llbot_pid)
+                if llbot_running:
                     total_cpu += cpu
                     total_mem += mem
-                    llbot_running = True
                     logger.debug(f"LLBot - PID: {llbot_pid}, CPU: {cpu:.1f}%, 内存: {mem:.1f}MB")
             
             # Bot运行状态：PMHQ和LLBot都启动才算运行中
