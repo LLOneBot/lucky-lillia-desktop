@@ -1965,16 +1965,13 @@ class HomePage:
                             progress_text.value = f"{downloaded / 1024 / 1024:.1f} MB / {total / 1024 / 1024:.1f} MB ({percent * 100:.1f}%)"
                         else:
                             progress_text.value = f"已下载: {downloaded / 1024 / 1024:.1f} MB"
-                        try:
-                            self.page.update()
-                        except Exception:
-                            pass
+                        self._safe_update()
                     
                     self.downloader.download_qq(qq_installer_path, progress_callback=on_progress)
                     
                     status_text.value = "下载完成，正在静默安装QQ..."
                     progress_bar.value = None
-                    self.page.update()
+                    self._safe_update()
                     
                     subprocess.run([qq_installer_path, "/S"], capture_output=True, timeout=300)
                     
@@ -1991,10 +1988,16 @@ class HomePage:
                         config["qq_path"] = str(reg_qq_path)
                         self.config_manager.save_config(config)
                         
-                        snackbar = ft.SnackBar(content=ft.Text("QQ安装成功！"), bgcolor=ft.Colors.GREEN_700)
-                        self.page.overlay.append(snackbar)
-                        snackbar.open = True
-                        self.page.update()
+                        def show_success():
+                            if self.page:
+                                # 清理旧的 overlay 避免累积
+                                self.page.overlay.clear()
+                                snackbar = ft.SnackBar(content=ft.Text("QQ安装成功！"), bgcolor=ft.Colors.GREEN_700)
+                                self.page.overlay.append(snackbar)
+                                snackbar.open = True
+                                self.page.update()
+                        if self.page:
+                            self.page.run_thread(show_success)
                         
                         self._on_global_start_click(None)
                     else:
@@ -2007,7 +2010,7 @@ class HomePage:
                     progress_text.visible = False
                     confirm_btn.disabled = False
                     cancel_btn.disabled = False
-                    self.page.update()
+                    self._safe_update()
                 except Exception as ex:
                     logger.error(f"QQ下载或安装失败: {ex}")
                     status_text.value = f"安装失败: {ex}"
@@ -2015,7 +2018,7 @@ class HomePage:
                     progress_text.visible = False
                     confirm_btn.disabled = False
                     cancel_btn.disabled = False
-                    self.page.update()
+                    self._safe_update()
             
             threading.Thread(target=download_task, daemon=True).start()
         

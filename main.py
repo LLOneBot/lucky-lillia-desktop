@@ -506,9 +506,9 @@ def check_and_show_migration_dialog(page: ft.Page, on_complete: callable):
     def on_confirm(e):
         page.close(migration_dialog)
         success, error_msg = migration_manager.migrate_configs(config_files, has_token, db_files)
+        page.overlay.clear()
         if success:
             logger.info("配置迁移成功")
-            # 显示成功提示
             success_snackbar = ft.SnackBar(
                 content=ft.Text("配置迁移成功！"),
                 bgcolor=ft.Colors.GREEN_700
@@ -518,7 +518,6 @@ def check_and_show_migration_dialog(page: ft.Page, on_complete: callable):
             page.update()
         else:
             logger.error(f"配置迁移失败: {error_msg}")
-            # 显示错误提示
             error_snackbar = ft.SnackBar(
                 content=ft.Text(f"配置迁移失败: {error_msg}"),
                 bgcolor=ft.Colors.RED_700
