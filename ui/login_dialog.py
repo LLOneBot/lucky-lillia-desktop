@@ -360,33 +360,14 @@ class LoginDialog:
     
     def _uin_check_loop(self):
         import time
-        from utils.http_client import HttpClient
+        from utils.pmhq_client import PMHQClient
         
-        url = f"http://127.0.0.1:{self.pmhq_port}"
-        payload = {
-            "type": "call",
-            "data": {
-                "func": "getSelfInfo",
-                "args": []
-            }
-        }
-        
-        client = HttpClient(timeout=5)
+        client = PMHQClient(self.pmhq_port, timeout=5)
         while self._uin_check_running:
-            try:
-                resp = client.post(url, json_data=payload, timeout=5)
-                if resp.status == 200:
-                    data = resp.json()
-                    if data.get("type") == "call" and "data" in data:
-                        result = data["data"].get("result", {})
-                        uin = result.get("uin")
-                        if uin:
-                            # 登录成功
-                            self._handle_login_success(uin)
-                            return
-            except Exception:
-                pass
-            
+            info = client.fetch_self_info()
+            if info and info.uin:
+                self._handle_login_success(info.uin)
+                return
             time.sleep(1)
     
     def _handle_login_success(self, uin: str):

@@ -19,14 +19,6 @@ class ProcessResourceCard:
     
     def __init__(self, process_name: str, display_name: str, icon: str = ft.Icons.COMPUTER, 
                  show_download_status: bool = False):
-        """初始化进程资源卡片
-        
-        Args:
-            process_name: 进程名称
-            display_name: 显示名称
-            icon: 图标
-            show_download_status: 是否显示下载状态（用于PMHQ）
-        """
         self.process_name = process_name
         self.display_name = display_name
         self.icon = icon
@@ -36,9 +28,9 @@ class ProcessResourceCard:
         self.show_download_status = show_download_status
         self.file_exists = True
         self.control = None
+        self._version_text = None
         
     def build(self):
-        """构建UI组件"""
         self.status_icon = ft.Icon(
             name=ft.Icons.CIRCLE,
             color=ft.Colors.GREY_400,
@@ -79,6 +71,13 @@ class ProcessResourceCard:
             border_radius=3
         )
         
+        self._version_text = ft.Text(
+            "",
+            size=12,
+            color=ft.Colors.GREY_600,
+            visible=False,
+        )
+        
         self.control = ft.Card(
             content=ft.Container(
                 content=ft.Column([
@@ -93,6 +92,7 @@ class ProcessResourceCard:
                             size=16,
                             weight=ft.FontWeight.BOLD
                         ),
+                        self._version_text,
                     ], spacing=10),
                     ft.Row([
                         self.status_icon,
@@ -116,8 +116,7 @@ class ProcessResourceCard:
         return self.control
     
     def update_resources(self, cpu_percent: float, memory_mb: float, is_running: bool, 
-                        file_exists: bool = True):
-        """更新资源使用情况"""
+                        file_exists: bool = True, version: str = ""):
         self.cpu_percent = cpu_percent
         self.memory_mb = memory_mb
         self.is_running = is_running
@@ -148,6 +147,12 @@ class ProcessResourceCard:
         self.memory_text.value = f"内存: {memory_mb:.0f} MB"
         total_memory_mb = psutil.virtual_memory().total / 1024 / 1024
         self.memory_progress.value = min(memory_mb / total_memory_mb, 1.0)
+        
+        if version and self._version_text:
+            self._version_text.value = version
+            self._version_text.visible = True
+        elif self._version_text:
+            self._version_text.visible = False
 
 
 class ResourceMonitorCard:
@@ -1762,7 +1767,7 @@ class HomePage:
         import logging
         import threading
         import time
-        from utils.http_client import HttpClient
+        from utils.pmhq_client import PMHQClient
         logger = logging.getLogger(__name__)
         
         pmhq_port = self.process_manager.get_pmhq_port()
@@ -1770,34 +1775,17 @@ class HomePage:
             return
         
         def wait_thread():
-            url = f"http://127.0.0.1:{pmhq_port}"
-            payload = {
-                "type": "call",
-                "data": {
-                    "func": "getSelfInfo",
-                    "args": []
-                }
-            }
-            
-            client = HttpClient(timeout=5)
+            client = PMHQClient(pmhq_port, timeout=5)
             max_attempts = 60
             for _ in range(max_attempts):
-                try:
-                    resp = client.post(url, json_data=payload, timeout=5)
-                    if resp.status == 200:
-                        data = resp.json()
-                        if data.get("type") == "call" and "data" in data:
-                            result = data["data"].get("result", {})
-                            uin = result.get("uin")
-                            if uin:
-                                logger.info(f"登录完成，uin: {uin}")
-                                async def start_llbot():
-                                    self._start_llbot_service(config)
-                                if self.page:
-                                    self.page.run_task(start_llbot)
-                                return
-                except Exception:
-                    pass
+                info = client.fetch_self_info()
+                if info and info.uin:
+                    logger.info(f"登录完成，uin: {info.uin}")
+                    async def start_llbot():
+                        self._start_llbot_service(config)
+                    if self.page:
+                        self.page.run_task(start_llbot)
+                    return
                 time.sleep(1)
             
             logger.warning("等待登录超时")
@@ -2120,6 +2108,7 @@ class HomePage:
             qq_cpu = 0.0
             qq_mem = 0.0
             qq_running = False
+            qq_version = ""
             
             # 尝试从PMHQ获取QQ进程信息
             qq_pid = self.process_manager.fetch_qq_process_info()
@@ -2128,8 +2117,17 @@ class HomePage:
                 qq_resources = self.process_manager.get_qq_resources()
                 qq_cpu = qq_resources.get("cpu", 0.0)
                 qq_mem = qq_resources.get("memory", 0.0)
+                
+                # 获取QQ版本号
+                pmhq_port = self.process_manager.get_pmhq_port()
+                if pmhq_port:
+                    from utils.pmhq_client import PMHQClient
+                    client = PMHQClient(pmhq_port, timeout=2)
+                    device_info = client.get_device_info(timeout=2)
+                    if device_info:
+                        qq_version = device_info.build_ver
             
-            self.qq_card.update_resources(qq_cpu, qq_mem, qq_running)
+            self.qq_card.update_resources(qq_cpu, qq_mem, qq_running, version=qq_version)
                     
         except Exception as e:
             # 如果获取资源信息失败，使用默认值

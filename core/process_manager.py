@@ -14,6 +14,7 @@ import time
 
 from utils.port import get_available_port
 from utils.http_client import HttpClient, HttpError
+from utils.pmhq_client import PMHQClient
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,7 @@ class ProcessManager:
         self._qq_resources: Dict[str, float] = {"cpu": 0.0, "memory": 0.0}
         self._qq_process: Optional["psutil.Process"] = None
         self._http_client: Optional[HttpClient] = None
+        self._pmhq_client: Optional[PMHQClient] = None
         
     def start_pmhq(self, pmhq_path: str, config_path: str = "pmhq_config.json", 
                    qq_path: str = "", auto_login_qq: str = "", headless: bool = False) -> bool:
@@ -765,79 +767,56 @@ class ProcessManager:
         self._uin_fetch_thread.start()
     
     def _fetch_uin_loop(self) -> None:
-        """循环请求PMHQ获取uin，直到成功"""
         if self._pmhq_port is None:
             logger.error("PMHQ端口未设置，无法获取uin")
             return
         
-        url = f"http://localhost:{self._pmhq_port}"
-        payload = {
-            "type": "call",
-            "data": {
-                "func": "getSelfInfo",
-                "args": []
-            }
-        }
+        client = self._get_pmhq_client()
+        if not client:
+            logger.error("无法创建PMHQ客户端")
+            return
         
         max_attempts = 1200
         attempt = 0
-        client = self._get_http_client()
         
         while attempt < max_attempts:
-            # 检查PMHQ是否还在运行
             if self._status.get("pmhq") != ProcessStatus.RUNNING:
                 logger.info("PMHQ已停止，停止获取uin")
                 return
             
-            try:
-                resp = client.post(url, json_data=payload, timeout=5)
+            info = client.fetch_self_info()
+            if info and info.uin:
+                with self._lock:
+                    uin_changed = self._uin != info.uin
+                    if uin_changed:
+                        self._uin = info.uin
+                    callback = self._uin_callback
                 
-                if resp.status == 200:
-                    data = resp.json()
-                    if data.get("type") == "call" and "data" in data:
-                        result = data["data"].get("result", {})
-                        uin = result.get("uin")
-                        nickname = result.get("nickName") or result.get("nickname") or result.get("nick") or ""
-                        
-                        if uin:
-                            with self._lock:
-                                uin_changed = self._uin != uin
-                                if uin_changed:
-                                    self._uin = uin
-                                callback = self._uin_callback
-                            
-                            if uin_changed:
-                                logger.info(f"成功获取uin: {uin}")
-                                if callback:
-                                    try:
-                                        callback(uin, "")
-                                    except Exception as e:
-                                        logger.error(f"uin回调函数执行失败: {e}")
-                            
-                            if nickname:
-                                with self._lock:
-                                    self._nickname = nickname
-                                    callback = self._uin_callback
-                                logger.info(f"成功获取nickname: {nickname}")
-                                
-                                if callback:
-                                    try:
-                                        callback(uin, nickname)
-                                    except Exception as e:
-                                        logger.error(f"uin回调函数执行失败: {e}")
-                                return
-                            else:
-                                logger.debug(f"获取到uin: {uin}，但nickname为空，继续尝试...")
-                        
-            except HttpError as e:
-                logger.debug(f"获取uin请求失败 (尝试 {attempt + 1}/{max_attempts}): {e}")
-            except json.JSONDecodeError as e:
-                logger.debug(f"解析uin响应失败: {e}")
-            except Exception as e:
-                logger.debug(f"获取uin时发生异常: {e}")
+                if uin_changed:
+                    logger.info(f"成功获取uin: {info.uin}")
+                    if callback:
+                        try:
+                            callback(info.uin, "")
+                        except Exception as e:
+                            logger.error(f"uin回调函数执行失败: {e}")
+                
+                if info.nickname:
+                    with self._lock:
+                        self._nickname = info.nickname
+                        callback = self._uin_callback
+                    logger.info(f"成功获取nickname: {info.nickname}")
+                    
+                    if callback:
+                        try:
+                            callback(info.uin, info.nickname)
+                        except Exception as e:
+                            logger.error(f"uin回调函数执行失败: {e}")
+                    return
+                else:
+                    logger.debug(f"获取到uin: {info.uin}，但nickname为空，继续尝试...")
             
             attempt += 1
-            time.sleep(1)  # 每秒尝试一次
+            time.sleep(1)
         
         logger.warning(f"获取uin失败，已尝试 {max_attempts} 次")
     
@@ -850,14 +829,16 @@ class ProcessManager:
             return self._qq_resources.copy()
     
     def _get_http_client(self) -> HttpClient:
-        """获取共享的HTTP客户端实例（懒加载）
-        
-        Returns:
-            HttpClient实例
-        """
         if self._http_client is None:
             self._http_client = HttpClient(timeout=5)
         return self._http_client
+    
+    def _get_pmhq_client(self) -> Optional[PMHQClient]:
+        if self._pmhq_port is None:
+            return None
+        if self._pmhq_client is None or self._pmhq_client.port != self._pmhq_port:
+            self._pmhq_client = PMHQClient(self._pmhq_port, timeout=5)
+        return self._pmhq_client
     
     def fetch_qq_process_info(self) -> Optional[int]:
         """从PMHQ获取QQ进程信息，如果已有PID且进程仍在运行则复用"""
@@ -882,51 +863,20 @@ class ProcessManager:
                     self._qq_pid = None
                     self._qq_process = None
         
-        if self._pmhq_port is None:
+        client = self._get_pmhq_client()
+        if not client:
             logger.debug("PMHQ端口未设置，无法获取QQ进程信息")
             return None
         
-        url = f"http://localhost:{self._pmhq_port}"
-        echo_id = str(uuid.uuid4())
-        payload = {
-            "type": "call",
-            "data": {
-                "func": "getProcessInfo",
-                "args": [],
-                "echo": echo_id
-            }
-        }
+        import uuid
+        pid = client.fetch_qq_pid(echo=str(uuid.uuid4()))
         
-        try:
-            client = self._get_http_client()
-            resp = client.post(url, json_data=payload, timeout=5)
-            
-            logger.info(f"getProcessInfo响应状态码: {resp.status}")
-            if resp.status == 200:
-                data = resp.json()
-                logger.info(f"getProcessInfo响应数据: {data}")
-                if data.get("type") == "call" and "data" in data:
-                    result = data["data"].get("result", {})
-                    pid = result.get("pid")
-                    if pid:
-                        with self._lock:
-                            self._qq_pid = pid
-                        logger.info(f"获取QQ进程PID: {pid}")
-                        self._update_qq_resources(pid)
-                        return pid
-                    else:
-                        logger.info(f"getProcessInfo返回的result中没有pid: {result}")
-                else:
-                    logger.info(f"getProcessInfo响应格式不正确: type={data.get('type')}, data存在={('data' in data)}")
-            else:
-                logger.info(f"getProcessInfo请求失败，状态码: {resp.status}, 响应: {resp.text()}")
-                        
-        except HttpError as e:
-            logger.info(f"获取QQ进程信息请求失败: {e}")
-        except json.JSONDecodeError as e:
-            logger.info(f"解析QQ进程信息响应失败: {e}")
-        except Exception as e:
-            logger.info(f"获取QQ进程信息时发生异常: {e}")
+        if pid:
+            with self._lock:
+                self._qq_pid = pid
+            logger.info(f"获取QQ进程PID: {pid}")
+            self._update_qq_resources(pid)
+            return pid
         
         with self._lock:
             self._qq_process = None
