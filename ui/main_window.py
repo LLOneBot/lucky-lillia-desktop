@@ -282,6 +282,12 @@ class MainWindow:
         self._check_minimize_to_tray_on_start()
     
     def _on_nav_change(self, e):
+        # 启动过程中禁止切换页面
+        if self.home_page.is_starting or self.home_page.is_downloading or self.home_page.is_downloading_llbot or self.home_page.is_downloading_node or self.home_page.is_downloading_ffmpeg or self.home_page.is_downloading_ffprobe:
+            e.control.selected_index = self.current_page_index
+            if self.page:
+                self.page.update()
+            return
         self._navigate_to(e.control.selected_index)
     
     def _navigate_to(self, index: int):
@@ -313,9 +319,18 @@ class MainWindow:
         except AssertionError:
             pass
         
-        # 首页资源刷新放在页面显示之后
+        # 首页资源刷新放在后台线程执行，避免阻塞UI
         if index == 0:
-            self.home_page.refresh_process_resources()
+            import threading
+            threading.Thread(target=self._refresh_home_async, daemon=True).start()
+    
+    def _refresh_home_async(self):
+        self.home_page.refresh_process_resources()
+        try:
+            if self.page:
+                self.page.update()
+        except Exception:
+            pass
     
     def _on_theme_toggle(self, e):
         if self.page:

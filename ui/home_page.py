@@ -454,6 +454,7 @@ class HomePage:
         self._log_update_scheduled = False
         self._log_update_lock = __import__('threading').Lock()
         self._log_update_pending = False
+        self.is_starting = False
     
     def _safe_update(self):
         """线程安全的 UI 更新，确保在主线程执行"""
@@ -762,6 +763,8 @@ class HomePage:
     
     def _update_button_state(self, running: bool):
         self.services_running = running
+        if not running:
+            self.is_starting = False
         if running:
             self._start_button_text.value = "停止"
             self._start_button_icon.name = ft.Icons.STOP
@@ -861,8 +864,22 @@ class HomePage:
             logger.info("正在下载中，忽略点击")
             return
         
-        # 立即更新按钮状态为"已启动"，提供即时反馈
-        self._update_button_state(True)
+        if self.is_starting:
+            logger.info("正在启动中，忽略点击")
+            return
+        
+        self.is_starting = True
+        
+        # 立即更新按钮状态为"启动中"，提供即时反馈
+        self._start_button_text.value = "启动中"
+        self._start_button_icon.name = ft.Icons.HOURGLASS_EMPTY
+        self.global_start_button.style = ft.ButtonStyle(
+            bgcolor=ft.Colors.ORANGE_600,
+            padding=ft.padding.symmetric(horizontal=40, vertical=16),
+            shape=ft.RoundedRectangleBorder(radius=28),
+        )
+        if self.page:
+            self.page.update()
         
         # 添加"正在启动..."日志
         if self.log_collector:
@@ -1888,6 +1905,7 @@ class HomePage:
                 logger.error("LLBot启动失败")
                 self._show_error_dialog("启动失败", "LLBot启动失败")
         
+        self.is_starting = False
         self._update_button_state(True)
         self.refresh_process_resources()
         if self.page:
