@@ -1,9 +1,33 @@
 """系统配置页面"""
 
 import flet as ft
+import tkinter as tk
+from tkinter import filedialog
+import threading
 from typing import Optional, Callable
 from pathlib import Path
 from core.config_manager import ConfigManager, ConfigError
+
+
+def _pick_file_native(callback, title="选择文件", filetypes=None, initial_dir=None):
+    """使用 tkinter 原生文件对话框（Flet 0.80 的 FilePicker 在 desktop 模式有 bug）"""
+    def _pick():
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes('-topmost', True)
+        
+        kwargs = {"title": title}
+        if filetypes:
+            kwargs["filetypes"] = filetypes
+        if initial_dir:
+            kwargs["initialdir"] = initial_dir
+        
+        file_path = filedialog.askopenfilename(**kwargs)
+        root.destroy()
+        if file_path:
+            callback(file_path)
+    
+    threading.Thread(target=_pick, daemon=True).start()
 
 
 class ConfigPage:
@@ -13,6 +37,7 @@ class ConfigPage:
         self.on_config_saved = on_config_saved
         self.control = None
         self.current_config = {}
+        self._page = None
         
     def build(self):
         # 加载当前配置
@@ -122,22 +147,6 @@ class ConfigPage:
             keyboard_type=ft.KeyboardType.NUMBER,
         )
         
-        # 错误提示文本
-        self.error_text = ft.Text(
-            "",
-            color=ft.Colors.RED_400,
-            size=14,
-            visible=False
-        )
-        
-        # 成功提示文本
-        self.success_text = ft.Text(
-            "",
-            color=ft.Colors.GREEN_400,
-            size=14,
-            visible=False
-        )
-        
         # 悬浮保存按钮
         self.save_button = ft.FloatingActionButton(
             icon=ft.Icons.SAVE,
@@ -145,12 +154,6 @@ class ConfigPage:
             on_click=self._on_save_config,
         )
         
-        # 文件选择器
-        self.file_picker = ft.FilePicker(
-            on_result=self._on_file_picker_result
-        )
-        
-        # 悬浮按钮容器
         floating_buttons = ft.Container(
             content=self.save_button,
             right=20,
@@ -161,7 +164,7 @@ class ConfigPage:
         main_content = ft.Column([
             ft.Row([
                 ft.Icon(
-                    name=ft.Icons.SETTINGS,
+                    ft.Icons.SETTINGS,
                     size=36,
                     color=ft.Colors.PRIMARY
                 ),
@@ -193,7 +196,6 @@ class ConfigPage:
                     padding=24,
                 ),
                 elevation=3,
-                surface_tint_color=ft.Colors.PRIMARY,
             ),
             
             # 日志设置区域
@@ -217,7 +219,6 @@ class ConfigPage:
                     padding=24,
                 ),
                 elevation=3,
-                surface_tint_color=ft.Colors.PRIMARY,
             ),
             
             # 路径配置区域
@@ -252,19 +253,13 @@ class ConfigPage:
                     padding=24,
                 ),
                 elevation=3,
-                surface_tint_color=ft.Colors.PRIMARY,
             ),
             
-            # 提示信息
-            self.error_text,
-            self.success_text,
-            
-            # 文件选择器（隐藏）
-            self.file_picker,
+            # 底部留白
+            ft.Container(height=60),
         ], spacing=20)
         
         # 使用Stack叠加内容和悬浮按钮
-        # 滚动容器需要放在Stack内部，并且使用ListView替代Column的scroll
         scrollable_content = ft.Container(
             content=ft.ListView(
                 controls=[main_content],
@@ -314,66 +309,58 @@ class ConfigPage:
             return os.getcwd()
     
     def _on_select_qq_path(self, e):
-        self._current_field = "qq_path"
         initial_dir = self._get_initial_directory(self.qq_path_field.value)
-        self.file_picker.pick_files(
-            dialog_title="选择QQ可执行文件",
-            allowed_extensions=["exe"],
-            allow_multiple=False,
-            initial_directory=initial_dir
+        def on_selected(path):
+            self.qq_path_field.value = path
+            if self._page:
+                self._page.update()
+        _pick_file_native(
+            on_selected,
+            title="选择QQ可执行文件",
+            filetypes=[("可执行文件", "*.exe"), ("所有文件", "*.*")],
+            initial_dir=initial_dir
         )
     
     def _on_select_pmhq_path(self, e):
-        self._current_field = "pmhq_path"
         initial_dir = self._get_initial_directory(self.pmhq_path_field.value)
-        self.file_picker.pick_files(
-            dialog_title="选择PMHQ可执行文件",
-            allowed_extensions=["exe"],
-            allow_multiple=False,
-            initial_directory=initial_dir
+        def on_selected(path):
+            self.pmhq_path_field.value = path
+            if self._page:
+                self._page.update()
+        _pick_file_native(
+            on_selected,
+            title="选择PMHQ可执行文件",
+            filetypes=[("可执行文件", "*.exe"), ("所有文件", "*.*")],
+            initial_dir=initial_dir
         )
     
     def _on_select_llbot_path(self, e):
-        self._current_field = "llbot_path"
         initial_dir = self._get_initial_directory(self.llbot_path_field.value)
-        self.file_picker.pick_files(
-            dialog_title="选择LLBot脚本文件",
-            allowed_extensions=["js"],
-            allow_multiple=False,
-            initial_directory=initial_dir
+        def on_selected(path):
+            self.llbot_path_field.value = path
+            if self._page:
+                self._page.update()
+        _pick_file_native(
+            on_selected,
+            title="选择LLBot脚本文件",
+            filetypes=[("JavaScript文件", "*.js"), ("所有文件", "*.*")],
+            initial_dir=initial_dir
         )
     
     def _on_select_node_path(self, e):
-        self._current_field = "node_path"
         initial_dir = self._get_initial_directory(self.node_path_field.value)
-        self.file_picker.pick_files(
-            dialog_title="选择Node.js可执行文件",
-            allowed_extensions=["exe"],
-            allow_multiple=False,
-            initial_directory=initial_dir
+        def on_selected(path):
+            self.node_path_field.value = path
+            if self._page:
+                self._page.update()
+        _pick_file_native(
+            on_selected,
+            title="选择Node.js可执行文件",
+            filetypes=[("可执行文件", "*.exe"), ("所有文件", "*.*")],
+            initial_dir=initial_dir
         )
     
-    def _on_file_picker_result(self, e: ft.FilePickerResultEvent):
-        if e.files and len(e.files) > 0:
-            selected_path = e.files[0].path
-            
-            if self._current_field == "qq_path":
-                self.qq_path_field.value = selected_path
-                self.qq_path_field.update()
-            elif self._current_field == "pmhq_path":
-                self.pmhq_path_field.value = selected_path
-                self.pmhq_path_field.update()
-            elif self._current_field == "llbot_path":
-                self.llbot_path_field.value = selected_path
-                self.llbot_path_field.update()
-            elif self._current_field == "node_path":
-                self.node_path_field.value = selected_path
-                self.node_path_field.update()
-    
     def _on_save_config(self, e):
-        self.error_text.visible = False
-        self.success_text.visible = False
-        
         try:
             config = self.config_manager.load_config()
         except ConfigError:
@@ -429,22 +416,26 @@ class ConfigPage:
             pass  # 忽略清理失败
     
     def _show_error(self, message: str):
-        self.error_text.value = message
-        self.error_text.visible = True
-        self.success_text.visible = False
-        try:
-            self.control.update()
-        except (AssertionError, AttributeError):
-            pass  # 控件未添加到页面，跳过更新
+        if self._page:
+            snack = ft.SnackBar(
+                content=ft.Text(message, color=ft.Colors.WHITE),
+                bgcolor=ft.Colors.RED_600,
+                duration=2000,
+            )
+            self._page.overlay.append(snack)
+            snack.open = True
+            self._page.update()
     
     def _show_success(self, message: str):
-        self.success_text.value = message
-        self.success_text.visible = True
-        self.error_text.visible = False
-        try:
-            self.control.update()
-        except (AssertionError, AttributeError):
-            pass  # 控件未添加到页面，跳过更新
+        if self._page:
+            snack = ft.SnackBar(
+                content=ft.Text(message, color=ft.Colors.WHITE),
+                bgcolor=ft.Colors.GREEN_600,
+                duration=2000,
+            )
+            self._page.overlay.append(snack)
+            snack.open = True
+            self._page.update()
     
     def refresh(self):
         try:
@@ -459,18 +450,14 @@ class ConfigPage:
             self.headless_checkbox.value = self.current_config.get("headless", False)
             self.minimize_to_tray_on_start_checkbox.value = self.current_config.get("minimize_to_tray_on_start", False)
             self.log_save_enabled_checkbox.value = self.current_config.get("log_save_enabled", True)
-            # 秒转小时显示
             retention_seconds = self.current_config.get("log_retention_seconds", 604800)
             retention_hours = retention_seconds // 3600 if retention_seconds > 0 else 0
             self.log_retention_hours_field.value = str(retention_hours)
             
-            self.error_text.visible = False
-            self.success_text.visible = False
-            
-            if self.control:
+            if self._page:
                 try:
-                    self.control.update()
-                except (AssertionError, AttributeError):
-                    pass  # 控件未添加到页面，跳过更新
+                    self._page.update()
+                except Exception:
+                    pass
         except ConfigError as e:
             self._show_error(f"加载配置失败: {str(e)}")

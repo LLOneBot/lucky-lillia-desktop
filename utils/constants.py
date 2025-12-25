@@ -9,9 +9,9 @@ NPM_PACKAGES = {
 }
 
 GITHUB_REPOS = {
-    "pmhq": "linyuchen/pmhq",
     "llbot": "LLOneBot/LLOneBot",
-    "app": "LLOneBot/lucky-lillia-desktop"
+    "app": "LLOneBot/lucky-lillia-desktop",
+    "pmhq": "linyuchen/pmhq",
 }
 
 DEFAULT_CONFIG = {

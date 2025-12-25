@@ -1,6 +1,6 @@
 # UI框架
-flet>=0.28.1
-flet-desktop>=0.28.1
+flet>=0.80.0
+flet-desktop>=0.80.0
 
 # 系统资源监控
 psutil>=5.9.0

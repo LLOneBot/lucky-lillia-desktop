@@ -89,9 +89,6 @@ class LLBotConfigPage:
     def build(self):
         self.current_config = self._load_config()
         
-        self.error_text = ft.Text("", color=ft.Colors.RED_400, size=14, visible=False)
-        self.success_text = ft.Text("", color=ft.Colors.GREEN_400, size=14, visible=False)
-        
         # WebUI
         self.webui_enable = ft.Checkbox(label="启用", 
             value=self.current_config.get("webui", {}).get("enable", True))
@@ -137,9 +134,11 @@ class LLBotConfigPage:
         self.milky_webhook_container = ft.Column(spacing=8)
         self._rebuild_webhook_urls(milky_cfg.get("webhook", {}).get("urls", []))
         
-        # 连接标签页
-        self.connects_tabs = ft.Tabs(selected_index=0, tabs=[], height=320,
-                                      on_change=self._on_tab_change)
+        # 连接标签页 - 使用自定义实现替代 ft.Tabs
+        self._connect_tab_index = 0
+        self._connect_tab_buttons = ft.Row(spacing=0, scroll=ft.ScrollMode.AUTO)
+        self._connect_tab_content = ft.Container(height=280)
+        self._connect_tab_contents: List[ft.Control] = []
         self._rebuild_tabs()
         
         # 其他配置
@@ -191,7 +190,7 @@ class LLBotConfigPage:
                         color=ft.Colors.ORANGE_400),
                 ft.Text("获取到QQ账号后才能编辑Bot配置", size=16, color=ft.Colors.GREY_600),
             ], spacing=16, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-            alignment=ft.alignment.center,
+            alignment=ft.Alignment(0, 0),
             padding=ft.padding.symmetric(vertical=100),
             visible=not bool(self.get_uin_func()),
         )
@@ -203,7 +202,11 @@ class LLBotConfigPage:
             ]),
             self._section("OneBot 11", ft.Icons.SETTINGS_ETHERNET, [
                 ft.Row([self.ob11_enable], spacing=16),
-                self.connects_tabs
+                ft.Column([
+                    self._connect_tab_buttons,
+                    ft.Divider(height=1),
+                    self._connect_tab_content,
+                ], spacing=0),
             ]),
             self._section("Satori", ft.Icons.CLOUD, [
                 ft.Row([self.satori_enable, self.satori_port, self.satori_token], spacing=16)
@@ -233,7 +236,8 @@ class LLBotConfigPage:
                 ft.Row([self.music_sign_url], spacing=16),
                 ft.Row([self.ffmpeg_path], spacing=16)
             ]),
-            self.error_text, self.success_text,
+            # 底部留白
+            ft.Container(height=60),
         ], spacing=16, visible=bool(self.get_uin_func()))
         
         # 主界面内容
@@ -276,7 +280,8 @@ class LLBotConfigPage:
 
     def _rebuild_tabs(self):
         self.connect_controls.clear()
-        self.connects_tabs.tabs.clear()
+        self._connect_tab_contents.clear()
+        self._connect_tab_buttons.controls.clear()
         
         connects = self.current_config.get("ob11", {}).get("connect", [])
         
@@ -296,34 +301,73 @@ class LLBotConfigPage:
                 on_click=lambda e, idx=i: self._on_delete_connect(idx)
             )
             
-            self.connects_tabs.tabs.append(ft.Tab(
-                text=tab_name,
-                content=ft.Container(
-                    content=ft.Column([
-                        ft.Row(row1, spacing=16),
-                        ft.Row(row2, spacing=16),
-                        ft.Row(row3, spacing=16),
-                        ft.Row([delete_btn], alignment=ft.MainAxisAlignment.END),
-                    ], spacing=12),
-                    padding=16
-                )
-            ))
-        
-        self.connects_tabs.tabs.append(ft.Tab(
-            text="+",
-            content=ft.Container(
+            content = ft.Container(
                 content=ft.Column([
-                    ft.Text("选择要添加的连接类型:", size=16),
-                    ft.Row([
-                        ft.ElevatedButton("WebSocket", on_click=lambda e: self._add_connect("ws")),
-                        ft.ElevatedButton("反向WS", on_click=lambda e: self._add_connect("ws-reverse")),
-                        ft.ElevatedButton("HTTP", on_click=lambda e: self._add_connect("http")),
-                        ft.ElevatedButton("HTTP POST", on_click=lambda e: self._add_connect("http-post")),
-                    ], spacing=12, wrap=True),
-                ], spacing=16, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-                padding=20, alignment=ft.alignment.center
+                    ft.Row(row1, spacing=16),
+                    ft.Row(row2, spacing=16),
+                    ft.Row(row3, spacing=16),
+                    ft.Row([delete_btn], alignment=ft.MainAxisAlignment.END),
+                ], spacing=12),
+                padding=16
             )
-        ))
+            self._connect_tab_contents.append(content)
+            
+            tab_btn = ft.TextButton(
+                tab_name,
+                on_click=lambda e, idx=i: self._switch_tab(idx),
+                style=ft.ButtonStyle(
+                    color={
+                        ft.ControlState.DEFAULT: ft.Colors.PRIMARY if i == self._connect_tab_index else ft.Colors.ON_SURFACE,
+                    }
+                )
+            )
+            self._connect_tab_buttons.controls.append(tab_btn)
+        
+        # 添加 "+" 按钮
+        add_content = ft.Container(
+            content=ft.Column([
+                ft.Text("选择要添加的连接类型:", size=16),
+                ft.Row([
+                    ft.ElevatedButton("WebSocket", on_click=lambda e: self._add_connect("ws")),
+                    ft.ElevatedButton("反向WS", on_click=lambda e: self._add_connect("ws-reverse")),
+                    ft.ElevatedButton("HTTP", on_click=lambda e: self._add_connect("http")),
+                    ft.ElevatedButton("HTTP POST", on_click=lambda e: self._add_connect("http-post")),
+                ], spacing=12, wrap=True),
+            ], spacing=16, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+            padding=20,
+        )
+        self._connect_tab_contents.append(add_content)
+        
+        add_btn = ft.TextButton(
+            "+",
+            on_click=lambda e: self._switch_tab(len(self._connect_tab_contents) - 1),
+            style=ft.ButtonStyle(
+                color={
+                    ft.ControlState.DEFAULT: ft.Colors.PRIMARY if self._connect_tab_index == len(connects) else ft.Colors.ON_SURFACE,
+                }
+            )
+        )
+        self._connect_tab_buttons.controls.append(add_btn)
+        
+        # 更新当前显示的内容
+        if self._connect_tab_contents:
+            idx = min(self._connect_tab_index, len(self._connect_tab_contents) - 1)
+            self._connect_tab_content.content = self._connect_tab_contents[idx]
+    
+    def _switch_tab(self, index: int):
+        self._connect_tab_index = index
+        # 更新按钮样式
+        for i, btn in enumerate(self._connect_tab_buttons.controls):
+            if isinstance(btn, ft.TextButton):
+                btn.style = ft.ButtonStyle(
+                    color={
+                        ft.ControlState.DEFAULT: ft.Colors.PRIMARY if i == index else ft.Colors.ON_SURFACE,
+                    }
+                )
+        # 更新内容
+        if 0 <= index < len(self._connect_tab_contents):
+            self._connect_tab_content.content = self._connect_tab_contents[index]
+        self._try_update()
     
     def _build_connect_controls(self, conn: Dict, index: int) -> Dict:
         conn_type = conn.get("type", "ws")
@@ -357,9 +401,6 @@ class LLBotConfigPage:
         
         return controls
 
-    def _on_tab_change(self, e):
-        pass
-    
     def _on_open_webui(self, e):
         import webbrowser
         port = self.webui_port.value or "3080"
@@ -408,19 +449,19 @@ class LLBotConfigPage:
             self.current_config["ob11"]["connect"] = []
         self.current_config["ob11"]["connect"].append(new_conn)
         
+        self._connect_tab_index = len(self.current_config["ob11"]["connect"]) - 1
         self._rebuild_tabs()
-        self.connects_tabs.selected_index = len(self.connects_tabs.tabs) - 2
         self._try_update()
     
     def _on_delete_connect(self, index: int):
         connects = self.current_config.get("ob11", {}).get("connect", [])
         if 0 <= index < len(connects):
             connects.pop(index)
-            self._rebuild_tabs()
             if connects:
-                self.connects_tabs.selected_index = min(index, len(connects) - 1)
+                self._connect_tab_index = min(index, len(connects) - 1)
             else:
-                self.connects_tabs.selected_index = 0
+                self._connect_tab_index = 0
+            self._rebuild_tabs()
             self._try_update()
     
     def _collect_connects(self) -> List[Dict]:
@@ -448,9 +489,6 @@ class LLBotConfigPage:
         return result
 
     def _on_save(self, e):
-        self.error_text.visible = False
-        self.success_text.visible = False
-        
         if not self.get_uin_func():
             self._show_error("请先启动PMHQ并登录QQ")
             return
@@ -521,16 +559,26 @@ class LLBotConfigPage:
         self.ffmpeg_path.value = cfg.get("ffmpeg", "")
 
     def _show_error(self, msg: str):
-        self.error_text.value = msg
-        self.error_text.visible = True
-        self.success_text.visible = False
-        self._try_update()
+        if self.control and self.control.page:
+            snack = ft.SnackBar(
+                content=ft.Text(msg, color=ft.Colors.WHITE),
+                bgcolor=ft.Colors.RED_600,
+                duration=2000,
+            )
+            self.control.page.overlay.append(snack)
+            snack.open = True
+            self.control.page.update()
     
     def _show_success(self, msg: str):
-        self.success_text.value = msg
-        self.success_text.visible = True
-        self.error_text.visible = False
-        self._try_update()
+        if self.control and self.control.page:
+            snack = ft.SnackBar(
+                content=ft.Text(msg, color=ft.Colors.WHITE),
+                bgcolor=ft.Colors.GREEN_600,
+                duration=2000,
+            )
+            self.control.page.overlay.append(snack)
+            snack.open = True
+            self.control.page.update()
     
     def _try_update(self):
         try:
@@ -547,6 +595,4 @@ class LLBotConfigPage:
         self.no_uin_container.visible = not has_uin
         self.config_content.visible = has_uin
         self.floating_buttons.visible = has_uin
-        self.error_text.visible = False
-        self.success_text.visible = False
         self._try_update()

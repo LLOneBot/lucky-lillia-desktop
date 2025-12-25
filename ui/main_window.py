@@ -96,7 +96,7 @@ class MainWindow:
         apply_theme(page, theme_mode)
         
         # 注册窗口关闭事件
-        page.window.prevent_close = True  # 阻止默认关闭行为
+        page.window.prevent_close = True
         page.window.on_event = self._on_window_event
         
         # 创建页面实例
@@ -124,6 +124,7 @@ class MainWindow:
             self.config_manager,
             on_config_saved=self._on_config_saved
         )
+        self.config_page._page = page
         self.config_page.build()
         
         self.llbot_config_page = LLBotConfigPage(
@@ -203,7 +204,7 @@ class MainWindow:
         
         # 创建头像/图标容器
         self.avatar_icon = ft.Icon(
-            name=ft.Icons.SMART_TOY,
+            ft.Icons.SMART_TOY,
             size=32,
             color=ft.Colors.PRIMARY
         )
@@ -211,7 +212,7 @@ class MainWindow:
             src="",
             width=48,
             height=48,
-            fit=ft.ImageFit.COVER,
+            fit="cover",
             border_radius=ft.border_radius.all(24),
             visible=False
         )
@@ -221,7 +222,7 @@ class MainWindow:
                 self.avatar_image
             ]),
             padding=ft.padding.symmetric(vertical=20),
-            alignment=ft.alignment.center,
+            alignment=ft.Alignment(0, 0),
         )
         
         # 设置uin回调，当获取到uin时更新头像
@@ -246,7 +247,7 @@ class MainWindow:
                     ft.Container(
                         content=self.theme_button,
                         padding=16,
-                        alignment=ft.alignment.center,
+                        alignment=ft.Alignment(0, 0),
                     ),
                 ], spacing=0, expand=True, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
                 bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.PRIMARY),
@@ -376,18 +377,15 @@ class MainWindow:
             self._update_tray_title()
     
     def _on_window_event(self, e):
-        if e.data == "close":
-            # 检查用户是否已经记住了选择
+        # Flet 0.80: 使用 e.type 检测关闭事件
+        if hasattr(e, 'type') and str(e.type) == "WindowEventType.CLOSE":
             close_to_tray = self.config_manager.load_setting("close_to_tray", None)
             
             if close_to_tray is True:
-                # 用户选择了收进托盘
                 self._minimize_to_tray()
             elif close_to_tray is False:
-                # 用户选择了直接退出
                 self._do_close()
             else:
-                # 首次关闭，显示选择对话框
                 self._show_close_dialog()
     
     def _show_close_dialog(self):
@@ -399,17 +397,17 @@ class MainWindow:
                 [
                     ft.Container(
                         content=ft.Text("关闭窗口", text_align=ft.TextAlign.CENTER),
-                        alignment=ft.alignment.center,
+                        alignment=ft.Alignment(0, 0),
                         width=250,
                     ),
                     ft.Container(
                         content=ft.IconButton(
                             icon=ft.Icons.CLOSE,
                             icon_size=18,
-                            on_click=lambda e: self.page.close(self.close_dialog) if self.page else None,
+                            on_click=lambda e: self.page.pop_dialog() if self.page else None,
                             tooltip="取消",
                         ),
-                        alignment=ft.alignment.center_right,
+                        alignment=ft.Alignment(1, 0),
                         width=250,
                     ),
                 ],
@@ -442,11 +440,11 @@ class MainWindow:
         )
         
         if self.page:
-            self.page.open(self.close_dialog)
+            self.page.show_dialog(self.close_dialog)
     
     def _on_close_choice(self, to_tray: bool):
         if self.close_dialog and self.page:
-            self.page.close(self.close_dialog)
+            self.page.pop_dialog()
         
         if self.remember_choice:
             self.config_manager.save_setting("close_to_tray", to_tray)
@@ -477,10 +475,14 @@ class MainWindow:
         # 窗口关闭时的清理逻辑
         self._cleanup(force_cleanup=force_exit)
         
-        # 关闭窗口 - 取消阻止关闭，让系统直接处理
         if self.page:
             self.page.window.prevent_close = False
-            self.page.window.close()
+            async def do_close():
+                try:
+                    await self.page.window.close()
+                except RuntimeError:
+                    pass  # Session 已关闭，忽略
+            self.page.run_task(do_close)
     
     def _execute_pending_update(self, script_path: str):
         import subprocess

@@ -1,4 +1,4 @@
-import os
+﻿import os
 import sys
 import flet as ft
 import traceback
@@ -504,7 +504,7 @@ def check_and_show_migration_dialog(page: ft.Page, on_complete: callable):
     files_text = "\n".join(files_desc)
     
     def on_confirm(e):
-        page.close(migration_dialog)
+        page.pop_dialog()
         success, error_msg = migration_manager.migrate_configs(config_files, has_token, db_files)
         page.overlay.clear()
         if success:
@@ -528,7 +528,7 @@ def check_and_show_migration_dialog(page: ft.Page, on_complete: callable):
         on_complete()
     
     def on_cancel(e):
-        page.close(migration_dialog)
+        page.pop_dialog()
         logger.info("用户取消配置迁移")
         on_complete()
     
@@ -564,7 +564,7 @@ def check_and_show_migration_dialog(page: ft.Page, on_complete: callable):
     
     # 确保页面已初始化
     page.add(ft.Container())
-    page.open(migration_dialog)
+    page.show_dialog(migration_dialog)
 
 
 def main(page: ft.Page):
@@ -680,7 +680,7 @@ def show_startup_error(page: ft.Page, e: Exception):
     
     # 确保页面已初始化
     page.add(ft.Container())
-    page.open(error_dialog)
+    page.show_dialog(error_dialog)
 
 
 if __name__ == "__main__":

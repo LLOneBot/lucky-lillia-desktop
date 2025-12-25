@@ -1,4 +1,4 @@
-"""首页/控制面板"""
+﻿"""首页/控制面板"""
 from pathlib import Path
 
 import flet as ft
@@ -32,7 +32,7 @@ class ProcessResourceCard:
         
     def build(self):
         self.status_icon = ft.Icon(
-            name=ft.Icons.CIRCLE,
+            ft.Icons.CIRCLE,
             color=ft.Colors.GREY_400,
             size=16
         )
@@ -83,7 +83,7 @@ class ProcessResourceCard:
                 content=ft.Column([
                     ft.Row([
                         ft.Icon(
-                            name=self.icon,
+                            self.icon,
                             size=20,
                             color=ft.Colors.PRIMARY
                         ),
@@ -111,7 +111,6 @@ class ProcessResourceCard:
                 padding=16,
             ),
             elevation=2,
-            surface_tint_color=ft.Colors.PRIMARY,
         )
         return self.control
     
@@ -198,7 +197,7 @@ class ResourceMonitorCard:
                 content=ft.Column([
                     ft.Row([
                         ft.Icon(
-                            name=ft.Icons.MEMORY,
+                            ft.Icons.MEMORY,
                             size=24,
                             color=ft.Colors.PRIMARY
                         ),
@@ -230,7 +229,6 @@ class ResourceMonitorCard:
                 padding=24,
             ),
             elevation=3,
-            surface_tint_color=ft.Colors.PRIMARY,
         )
         return self.control
     
@@ -255,15 +253,11 @@ class LogPreviewCard:
     """日志预览卡片组件"""
     
     def __init__(self, on_view_all: Optional[Callable] = None):
-        """初始化日志预览卡片
-        
-        Args:
-            on_view_all: 查看全部日志按钮回调
-        """
         self.on_view_all_callback = on_view_all
         self.log_entries = []
         self.control = None
         self._last_log_hash = None
+        self.page = None
         
     def build(self):
         """构建UI组件"""
@@ -291,7 +285,7 @@ class LogPreviewCard:
         self._empty_container = ft.Container(
             content=self._empty_text,
             expand=True,
-            alignment=ft.alignment.center,
+            alignment=ft.Alignment(0, 0),
         )
         
         self.log_list = ft.Column(
@@ -306,7 +300,7 @@ class LogPreviewCard:
                 content=ft.Column([
                     ft.Row([
                         ft.Icon(
-                            name=ft.Icons.ARTICLE,
+                            ft.Icons.ARTICLE,
                             size=24,
                             color=ft.Colors.PRIMARY
                         ),
@@ -338,7 +332,6 @@ class LogPreviewCard:
                 padding=24,
             ),
             elevation=3,
-            surface_tint_color=ft.Colors.PRIMARY,
         )
         return self.control
     
@@ -406,7 +399,14 @@ class LogPreviewCard:
                 else:
                     row.visible = False
             
-            self.log_list.scroll_to(offset=-1, duration=100)
+            # scroll_to 在 Flet 0.80 中是异步方法，在同步上下文中使用 run_task
+            if self.page:
+                async def do_scroll():
+                    try:
+                        await self.log_list.scroll_to(offset=-1, duration=100)
+                    except Exception:
+                        pass
+                self.page.run_task(do_scroll)
 
 
 class HomePage:
@@ -490,16 +490,18 @@ class HomePage:
         self.services_running = False
         
         # 创建全局启动/停止按钮
-        self.global_start_button = ft.ElevatedButton(
-            text="启动",
-            icon=ft.Icons.PLAY_ARROW,
+        self._start_button_text = ft.Text("启动", color=ft.Colors.WHITE, size=16, weight=ft.FontWeight.W_500)
+        self._start_button_icon = ft.Icon(ft.Icons.PLAY_ARROW, color=ft.Colors.WHITE, size=24)
+        self.global_start_button = ft.Button(
+            content=ft.Row([self._start_button_icon, self._start_button_text], spacing=8, alignment=ft.MainAxisAlignment.CENTER),
             on_click=self._on_global_button_click,
             style=ft.ButtonStyle(
-                color=ft.Colors.WHITE,
                 bgcolor=ft.Colors.GREEN_600,
                 padding=ft.padding.symmetric(horizontal=40, vertical=16),
+                shape=ft.RoundedRectangleBorder(radius=28),
             ),
             height=56,
+            width=160,
         )
         
         # 更新提示横幅
@@ -531,10 +533,10 @@ class HomePage:
         # 悬浮启动按钮
         floating_button = ft.Container(
             content=self.global_start_button,
-            bottom=30,
+            bottom=16,
             left=0,
             right=0,
-            alignment=ft.alignment.center,
+            alignment=ft.Alignment(0, 0),
         )
         
         # 标题文本（可动态更新）
@@ -546,7 +548,7 @@ class HomePage:
         
         # 标题图标（显示昵称时隐藏）
         self.title_icon = ft.Icon(
-            name=ft.Icons.DASHBOARD,
+            ft.Icons.DASHBOARD,
             size=36,
             color=ft.Colors.PRIMARY
         )
@@ -589,7 +591,7 @@ class HomePage:
             ),
             
             # 底部留白，给悬浮按钮腾出空间
-            ft.Container(height=50),
+            ft.Container(height=30),
         ], spacing=16, scroll=ft.ScrollMode.AUTO)
         
         self.control = ft.Stack([
@@ -759,30 +761,25 @@ class HomePage:
             self._on_global_start_click(e)
     
     def _update_button_state(self, running: bool):
-        """更新按钮状态
-        
-        Args:
-            running: 服务是否正在运行
-        """
         self.services_running = running
         if running:
-            self.global_start_button.text = "停止"
-            self.global_start_button.icon = ft.Icons.STOP
+            self._start_button_text.value = "停止"
+            self._start_button_icon.name = ft.Icons.STOP
             self.global_start_button.style = ft.ButtonStyle(
-                color=ft.Colors.WHITE,
                 bgcolor=ft.Colors.RED_600,
                 padding=ft.padding.symmetric(horizontal=40, vertical=16),
+                shape=ft.RoundedRectangleBorder(radius=28),
             )
         else:
-            self.global_start_button.text = "启动"
-            self.global_start_button.icon = ft.Icons.PLAY_ARROW
+            self._start_button_text.value = "启动"
+            self._start_button_icon.name = ft.Icons.PLAY_ARROW
             self.global_start_button.style = ft.ButtonStyle(
-                color=ft.Colors.WHITE,
                 bgcolor=ft.Colors.GREEN_600,
                 padding=ft.padding.symmetric(horizontal=40, vertical=16),
+                shape=ft.RoundedRectangleBorder(radius=28),
             )
         if self.page:
-            self.global_start_button.update()
+            self.page.update()
     
     def _stop_all_services(self):
         # 检查QQ是否在运行
@@ -797,12 +794,12 @@ class HomePage:
     def _show_stop_confirm_dialog(self):
         def on_confirm(e):
             if self.page:
-                self.page.close(dialog)
+                self.page.pop_dialog()
             self._do_stop_services(stop_qq=True)
         
         def on_cancel(e):
             if self.page:
-                self.page.close(dialog)
+                self.page.pop_dialog()
         
         dialog = ft.AlertDialog(
             modal=True,
@@ -823,7 +820,7 @@ class HomePage:
         )
         
         if self.page:
-            self.page.open(dialog)
+            self.page.show_dialog(dialog)
     
     def _do_stop_services(self, stop_qq: bool = False):
         """实际执行停止服务
@@ -864,17 +861,6 @@ class HomePage:
             logger.info("正在下载中，忽略点击")
             return
         
-        # 迁移旧版 llonebot 数据目录到 llbot
-        old_data_dir = Path("bin/llonebot/data")
-        new_data_dir = Path("bin/llbot/data")
-        if old_data_dir.exists() and not new_data_dir.exists():
-            try:
-                new_data_dir.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copytree(old_data_dir, new_data_dir)
-                logger.info(f"已迁移数据目录: {old_data_dir} -> {new_data_dir}")
-            except Exception as ex:
-                logger.warning(f"迁移数据目录失败: {ex}")
-        
         # 立即更新按钮状态为"已启动"，提供即时反馈
         self._update_button_state(True)
         
@@ -887,8 +873,31 @@ class HomePage:
                 message="正在启动..."
             )
             self.log_collector._logs.append(entry)
-            # 立即刷新日志预览
             self._refresh_log_preview()
+        
+        # 延迟执行启动逻辑，让 UI 先更新
+        def do_start():
+            self._do_start_services()
+        
+        if self.page:
+            self.page.run_thread(do_start)
+    
+    def _do_start_services(self):
+        import logging
+        import shutil
+        from pathlib import Path
+        logger = logging.getLogger(__name__)
+        
+        # 迁移旧版 llonebot 数据目录到 llbot
+        old_data_dir = Path("bin/llonebot/data")
+        new_data_dir = Path("bin/llbot/data")
+        if old_data_dir.exists() and not new_data_dir.exists():
+            try:
+                new_data_dir.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copytree(old_data_dir, new_data_dir)
+                logger.info(f"已迁移数据目录: {old_data_dir} -> {new_data_dir}")
+            except Exception as ex:
+                logger.warning(f"迁移数据目录失败: {ex}")
         
         # 获取配置
         try:
@@ -896,7 +905,7 @@ class HomePage:
             logger.info(f"配置加载成功: {config}")
         except Exception as ex:
             logger.error(f"配置加载失败: {ex}")
-            self._update_button_state(False)  # 恢复按钮状态
+            self._update_button_state(False)
             self._show_error_dialog("配置加载失败", str(ex))
             return
         
@@ -1016,7 +1025,7 @@ class HomePage:
         self.is_downloading = True
         
         if self.page:
-            self.page.open(self.download_dialog)
+            self.page.show_dialog(self.download_dialog)
         logger.info("下载对话框已显示")
         
         import threading
@@ -1069,7 +1078,7 @@ class HomePage:
                 time.sleep(1)
                 
                 if self.page:
-                    self.page.close(self.download_dialog)
+                    self.page.pop_dialog()
                 
                 # 检查Node.exe是否需要下载（同时检查版本 >= 22）
                 config = self.config_manager.load_config()
@@ -1117,7 +1126,7 @@ class HomePage:
         self.is_downloading = False
         self._update_button_state(False)  # 恢复按钮状态
         if self.page:
-            self.page.close(self.download_dialog)
+            self.page.pop_dialog()
     
     def _show_llbot_download_dialog(self):
         import logging
@@ -1135,7 +1144,7 @@ class HomePage:
         self.llbot_download_cancel_button.text = "取消"
         self.is_downloading_llbot = True
         
-        self.page.open(self.download_llbot_dialog)
+        self.page.show_dialog(self.download_llbot_dialog)
         logger.info("LLBot下载对话框已显示")
         
         import threading
@@ -1190,7 +1199,7 @@ class HomePage:
                 time.sleep(1)
                 
                 if self.page:
-                    self.page.close(self.download_llbot_dialog)
+                    self.page.pop_dialog()
                 
                 self._start_all_services()
             
@@ -1213,7 +1222,7 @@ class HomePage:
         self.is_downloading_llbot = False
         self._update_button_state(False)
         if self.page:
-            self.page.close(self.download_llbot_dialog)
+            self.page.pop_dialog()
     
     def _show_node_download_dialog(self):
         import logging
@@ -1231,7 +1240,7 @@ class HomePage:
         self.node_download_cancel_button.text = "取消"
         self.is_downloading_node = True
         
-        self.page.open(self.download_node_dialog)
+        self.page.show_dialog(self.download_node_dialog)
         logger.info("Node.exe下载对话框已显示")
         
         import threading
@@ -1283,7 +1292,7 @@ class HomePage:
                 time.sleep(1)
                 
                 if self.page:
-                    self.page.close(self.download_node_dialog)
+                    self.page.pop_dialog()
                 
                 config = self.config_manager.load_config()
                 ffmpeg_path = config.get("ffmpeg_path", DEFAULT_CONFIG["ffmpeg_path"])
@@ -1321,7 +1330,7 @@ class HomePage:
         self.is_downloading_node = False
         self._update_button_state(False)  # 恢复按钮状态
         if self.page:
-            self.page.close(self.download_node_dialog)
+            self.page.pop_dialog()
     
     def _build_ffmpeg_download_dialog(self):
         self.ffmpeg_download_progress_bar = ft.ProgressBar(
@@ -1390,7 +1399,7 @@ class HomePage:
         self.ffmpeg_download_cancel_button.text = "取消"
         self.is_downloading_ffmpeg = True
         
-        self.page.open(self.download_ffmpeg_dialog)
+        self.page.show_dialog(self.download_ffmpeg_dialog)
         logger.info("FFmpeg.exe下载对话框已显示")
         
         import threading
@@ -1442,7 +1451,7 @@ class HomePage:
                 time.sleep(1)
                 
                 if self.page:
-                    self.page.close(self.download_ffmpeg_dialog)
+                    self.page.pop_dialog()
                 
                 config = self.config_manager.load_config()
                 llbot_path = config.get("llbot_path", DEFAULT_CONFIG["llbot_path"])
@@ -1472,7 +1481,7 @@ class HomePage:
         self.is_downloading_ffmpeg = False
         self._update_button_state(False)  # 恢复按钮状态
         if self.page:
-            self.page.close(self.download_ffmpeg_dialog)
+            self.page.pop_dialog()
     
     def _build_ffprobe_download_dialog(self):
         self.ffprobe_download_progress_bar = ft.ProgressBar(
@@ -1541,7 +1550,7 @@ class HomePage:
         self.ffprobe_download_cancel_button.text = "取消"
         self.is_downloading_ffprobe = True
         
-        self.page.open(self.download_ffprobe_dialog)
+        self.page.show_dialog(self.download_ffprobe_dialog)
         logger.info("FFprobe.exe下载对话框已显示")
         
         import threading
@@ -1593,7 +1602,7 @@ class HomePage:
                 time.sleep(1)
                 
                 if self.page:
-                    self.page.close(self.download_ffprobe_dialog)
+                    self.page.pop_dialog()
                 
                 config = self.config_manager.load_config()
                 llbot_path = config.get("llbot_path", DEFAULT_CONFIG["llbot_path"])
@@ -1623,7 +1632,7 @@ class HomePage:
         self.is_downloading_ffprobe = False
         self._update_button_state(False)  # 恢复按钮状态
         if self.page:
-            self.page.close(self.download_ffprobe_dialog)
+            self.page.pop_dialog()
     
     def _start_all_services(self):
         import logging
@@ -1897,7 +1906,7 @@ class HomePage:
             ],
         )
         
-        self.page.open(error_dialog)
+        self.page.show_dialog(error_dialog)
     
     def _show_qq_install_dialog(self, config: dict):
         import logging
@@ -2016,15 +2025,17 @@ class HomePage:
         confirm_btn.on_click = do_download_and_install
         cancel_btn.on_click = do_cancel
         
-        self.page.open(qq_dialog)
+        self.page.show_dialog(qq_dialog)
     
     def _close_dialog(self, dialog):
         if self.page:
-            self.page.close(dialog)
+            self.page.pop_dialog()
     
     def set_page(self, page):
         """设置页面引用（用于显示对话框）"""
         self.page = page
+        if self.log_card:
+            self.log_card.page = page
     
     def update_title(self, title: str):
         """更新控制面板标题
@@ -2246,11 +2257,11 @@ class HomePage:
         
         def on_cancel(e):
             if self.page:
-                self.page.close(confirm_dialog)
+                self.page.pop_dialog()
         
         def on_confirm(e):
             if self.page:
-                self.page.close(confirm_dialog)
+                self.page.pop_dialog()
             self._start_component_updates()
         
         if running:
@@ -2274,7 +2285,7 @@ class HomePage:
         )
         
         if self.page:
-            self.page.open(confirm_dialog)
+            self.page.show_dialog(confirm_dialog)
     
     def _start_component_updates(self):
         import logging
@@ -2300,7 +2311,7 @@ class HomePage:
         )
         
         if self.page:
-            self.page.open(download_dialog)
+            self.page.show_dialog(download_dialog)
         
         # 设置回调
         def on_download_status(status: str):
@@ -2336,7 +2347,7 @@ class HomePage:
                 
                 # 关闭下载对话框
                 if self.page:
-                    self.page.close(download_dialog)
+                    self.page.pop_dialog()
                 self.update_banner.visible = False
                 if self.page:
                     self.page.update()
@@ -2414,7 +2425,7 @@ class HomePage:
             
             def close_info_dialog(ev):
                 if self.page:
-                    self.page.close(info_dialog)
+                    self.page.pop_dialog()
             
             info_dialog = ft.AlertDialog(
                 title=ft.Text("稍后更新"),
@@ -2427,7 +2438,7 @@ class HomePage:
                 ],
             )
             if self.page:
-                self.page.open(info_dialog)
+                self.page.show_dialog(info_dialog)
         
         # 构建消息
         msg = "管理器新版本已下载完成！\n\n需要重启程序以完成更新。"
@@ -2447,7 +2458,7 @@ class HomePage:
             actions_alignment=ft.MainAxisAlignment.END,
         )
         if self.page:
-            self.page.open(restart_dialog)
+            self.page.show_dialog(restart_dialog)
     
     def get_pending_update_script(self) -> Optional[str]:
         """获取待执行的更新脚本路径

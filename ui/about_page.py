@@ -1,4 +1,4 @@
-"""关于/版本页面"""
+﻿"""关于/版本页面"""
 
 import flet as ft
 import time
@@ -43,7 +43,7 @@ class VersionInfoCard:
             weight=ft.FontWeight.W_500
         )
         
-        self.update_icon = ft.Icon(name=ft.Icons.UPDATE, color=ft.Colors.ORANGE_400, size=20, visible=False)
+        self.update_icon = ft.Icon(ft.Icons.UPDATE, color=ft.Colors.ORANGE_400, size=20, visible=False)
         self.update_text = ft.Text("", size=12, color=ft.Colors.ORANGE_600, weight=ft.FontWeight.BOLD, visible=False)
         self.detail_button = ft.TextButton(
             "查看详情",
@@ -52,9 +52,9 @@ class VersionInfoCard:
             visible=False
         )
         
-        self.latest_icon = ft.Icon(name=ft.Icons.CHECK_CIRCLE_OUTLINE, color=ft.Colors.GREEN_400, size=20, visible=False)
+        self.latest_icon = ft.Icon(ft.Icons.CHECK_CIRCLE_OUTLINE, color=ft.Colors.GREEN_400, size=20, visible=False)
         self.latest_text = ft.Text("已是最新版本", size=12, color=ft.Colors.GREEN_600, visible=False)
-        self.error_icon = ft.Icon(name=ft.Icons.ERROR_OUTLINE, color=ft.Colors.RED_400, size=20, visible=False)
+        self.error_icon = ft.Icon(ft.Icons.ERROR_OUTLINE, color=ft.Colors.RED_400, size=20, visible=False)
         self.error_text = ft.Text("", size=12, color=ft.Colors.RED_600, visible=False)
         
         self.version_row = ft.Row([
@@ -72,7 +72,7 @@ class VersionInfoCard:
             content=ft.Container(
                 content=ft.Column([
                     ft.Row([
-                        ft.Icon(name=ft.Icons.APPS, size=24, color=ft.Colors.PRIMARY),
+                        ft.Icon(ft.Icons.APPS, size=24, color=ft.Colors.PRIMARY),
                         ft.Text(self.display_name, size=20, weight=ft.FontWeight.BOLD),
                     ], spacing=12),
                     ft.Divider(height=1, thickness=2),
@@ -81,7 +81,6 @@ class VersionInfoCard:
                 padding=24,
             ),
             elevation=3,
-            surface_tint_color=ft.Colors.PRIMARY,
         )
         return self.control
     
@@ -205,7 +204,7 @@ class AboutPage:
             content=ft.Column([
                 # 标题
                 ft.Row([
-                    ft.Icon(name=ft.Icons.INFO, size=36, color=ft.Colors.PRIMARY),
+                    ft.Icon(ft.Icons.INFO, size=36, color=ft.Colors.PRIMARY),
                     ft.Text("关于", size=32, weight=ft.FontWeight.BOLD),
                 ], spacing=12),
                 ft.Divider(height=2, thickness=2, color=ft.Colors.PRIMARY),
@@ -218,7 +217,7 @@ class AboutPage:
                                 ft.Image(
                                     src=get_resource_path("icon.png"),
                                     width=80, height=80,
-                                    fit=ft.ImageFit.CONTAIN,
+                                    fit="contain",
                                 ),
                                 ft.Column([
                                     ft.Text(APP_NAME, size=28, weight=ft.FontWeight.BOLD),
@@ -232,7 +231,6 @@ class AboutPage:
                         padding=28,
                     ),
                     elevation=3,
-                    surface_tint_color=ft.Colors.PRIMARY,
                 ),
                 
                 # 版本信息区域
@@ -270,7 +268,6 @@ class AboutPage:
                         padding=24,
                     ),
                     elevation=3,
-                    surface_tint_color=ft.Colors.PRIMARY,
                 ),
             ], spacing=20, scroll=ft.ScrollMode.AUTO),
             padding=28,
@@ -411,12 +408,12 @@ class AboutPage:
         
         def on_confirm(e):
             if self.page:
-                self.page.close(confirm_dialog)
+                self.page.pop_dialog()
             self._do_download_all_updates()
         
         def on_cancel(e):
             if self.page:
-                self.page.close(confirm_dialog)
+                self.page.pop_dialog()
         
         if running:
             content_text = (
@@ -439,7 +436,7 @@ class AboutPage:
         )
         
         if self.page:
-            self.page.open(confirm_dialog)
+            self.page.show_dialog(confirm_dialog)
     
     def _do_download_all_updates(self):
         if not self.update_manager:
@@ -461,7 +458,7 @@ class AboutPage:
         )
         
         if self.page:
-            self.page.open(download_dialog)
+            self.page.show_dialog(download_dialog)
         
         def on_download_status(status: str):
             async def update_status():
@@ -496,7 +493,7 @@ class AboutPage:
                 
                 # 关闭下载对话框
                 if self.page:
-                    self.page.close(download_dialog)
+                    self.page.pop_dialog()
                 
                 self.check_update_button.text = "检查更新"
                 self.check_update_button.icon = ft.Icons.CLOUD_DOWNLOAD
@@ -563,7 +560,7 @@ class AboutPage:
         )
         
         if self.page:
-            self.page.open(restart_dialog)
+            self.page.show_dialog(restart_dialog)
     
     def _open_url(self, url: str):
         import webbrowser
@@ -571,7 +568,7 @@ class AboutPage:
     
     def _close_dialog(self, dialog: ft.AlertDialog):
         if self.page:
-            self.page.close(dialog)
+            self.page.pop_dialog()
     
     def refresh(self):
         self._load_versions()

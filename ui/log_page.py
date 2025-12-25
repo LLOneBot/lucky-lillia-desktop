@@ -95,7 +95,7 @@ class LogPage:
         )
         self._empty_container = ft.Container(
             content=self._empty_text,
-            alignment=ft.alignment.center,
+            alignment=ft.Alignment(0, 0),
             padding=20,
             visible=True,
         )
@@ -123,7 +123,7 @@ class LogPage:
                     ft.Row(
                         [
                             ft.Icon(
-                                name=ft.Icons.ARTICLE, size=36, color=ft.Colors.PRIMARY
+                                ft.Icons.ARTICLE, size=36, color=ft.Colors.PRIMARY
                             ),
                             ft.Text("日志查看器", size=32, weight=ft.FontWeight.BOLD),
                         ],
@@ -243,11 +243,9 @@ class LogPage:
             pass
 
     def _on_copy_logs(self, e):
-        """复制选中的日志到剪贴板"""
         if not self._selected_rows:
             return
         
-        # 获取选中行的文本
         lines = []
         sorted_indices = sorted(self._selected_rows)
         for idx in sorted_indices:
@@ -257,11 +255,9 @@ class LogPage:
                     lines.append(text.value)
         
         if lines and self.control and self.control.page:
-            self.control.page.set_clipboard("\n".join(lines))
-            self.control.page.open(
-                ft.SnackBar(content=ft.Text(f"已复制 {len(lines)} 行日志"), duration=2000)
-            )
-            # 复制后清除选择
+            async def do_copy():
+                await self.control.page.clipboard.set("\n".join(lines))
+            self.control.page.run_task(do_copy)
             self._on_clear_selection(None)
 
     def _on_clear_logs(self, e):
@@ -332,15 +328,15 @@ class LogPage:
             try:
                 page = self.control.page if self.control else None
                 if page and self._is_page_visible:
-                    def safe_update():
+                    async def safe_update():
                         try:
                             if self.control and self.control.page and self._is_page_visible:
                                 self.log_list.update()
                                 if need_scroll:
-                                    self.log_list.scroll_to(offset=-1, duration=0)
+                                    await self.log_list.scroll_to(offset=-1, duration=0)
                         except Exception:
                             pass
-                    page.run_thread(safe_update)
+                    page.run_task(safe_update)
             except Exception:
                 pass
 

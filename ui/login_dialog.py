@@ -79,7 +79,7 @@ class LoginDialog:
                     self._build_qrcode_login_dialog()
                 
                 if self.dialog:
-                    self.page.open(self.dialog)
+                    self.page.show_dialog(self.dialog)
             
             if self.page:
                 self.page.run_task(show_dialog)
@@ -95,7 +95,7 @@ class LoginDialog:
                 src=avatar_url,
                 width=80,
                 height=80,
-                fit=ft.ImageFit.COVER,
+                fit="cover",
                 border_radius=ft.border_radius.all(40),
                 error_content=ft.Icon(ft.Icons.ACCOUNT_CIRCLE, size=80, color=ft.Colors.GREY_400)
             ),
@@ -142,7 +142,7 @@ class LoginDialog:
         
         # 登录按钮
         self.login_button = ft.ElevatedButton(
-            text="登录",
+            "登录",
             icon=ft.Icons.LOGIN,
             on_click=self._on_login_click,
             style=ft.ButtonStyle(
@@ -155,7 +155,7 @@ class LoginDialog:
         
         # 切换账号按钮
         self.switch_account_button = ft.TextButton(
-            text="切换账号",
+            "切换账号",
             icon=ft.Icons.SWAP_HORIZ,
             on_click=self._on_switch_account_click,
             visible=len(self.quick_login_accounts) > 1,
@@ -163,7 +163,7 @@ class LoginDialog:
         
         # 扫码登录按钮
         self.qrcode_button = ft.TextButton(
-            text="扫码登录",
+            "扫码登录",
             icon=ft.Icons.QR_CODE,
             on_click=self._on_qrcode_click,
         )
@@ -202,7 +202,7 @@ class LoginDialog:
             src="",
             width=180,
             height=180,
-            fit=ft.ImageFit.CONTAIN,
+            fit="contain",
             visible=False,
         )
         
@@ -233,7 +233,7 @@ class LoginDialog:
         # 快速登录按钮（如果有可用账号）
         quick_login_btn_visible = len(self.quick_login_accounts) > 0
         self.switch_account_button = ft.TextButton(
-            text="快速登录",
+            "快速登录",
             icon=ft.Icons.FLASH_ON,
             on_click=self._on_quick_login_mode_click,
             visible=quick_login_btn_visible,
@@ -246,13 +246,13 @@ class LoginDialog:
                     content=ft.Stack([
                         ft.Container(
                             content=self.loading_indicator,
-                            alignment=ft.alignment.center,
+                            alignment=ft.Alignment(0, 0),
                         ),
                         self.qrcode_image,
                     ]),
                     width=180,
                     height=180,
-                    alignment=ft.alignment.center,
+                    alignment=ft.Alignment(0, 0),
                 ),
                 ft.Container(height=6),
                 self.qrcode_tip_text,
@@ -379,7 +379,7 @@ class LoginDialog:
         
         async def close_and_callback():
             if self.dialog and self.page:
-                self.page.close(self.dialog)
+                self.page.pop_dialog()
             
             if self.on_login_success:
                 self.on_login_success(uin)
@@ -442,7 +442,7 @@ class LoginDialog:
     def _show_account_list(self):
         # 先关闭主登录对话框
         if self.dialog and self.page:
-            self.page.close(self.dialog)
+            self.page.pop_dialog()
         
         # 构建账号列表
         account_items = []
@@ -455,7 +455,7 @@ class LoginDialog:
                         src=acc.face_url,
                         width=40,
                         height=40,
-                        fit=ft.ImageFit.COVER,
+                        fit="cover",
                         border_radius=ft.border_radius.all(20),
                         error_content=ft.Icon(ft.Icons.ACCOUNT_CIRCLE, size=40)
                     ),
@@ -490,29 +490,29 @@ class LoginDialog:
         )
         
         if self.page:
-            self.page.open(self._account_dialog)
+            self.page.show_dialog(self._account_dialog)
     
     def _on_account_cancel_click(self, e):
         # 关闭账号选择对话框
         if hasattr(self, '_account_dialog') and self._account_dialog and self.page:
-            self.page.close(self._account_dialog)
+            self.page.pop_dialog()
         
         # 重新显示主登录对话框
         self._build_quick_login_dialog()
         if self.dialog and self.page:
-            self.page.open(self.dialog)
+            self.page.show_dialog(self.dialog)
     
     def _on_account_selected(self, account: LoginAccount):
         self.selected_account = account
         
         # 关闭账号选择对话框
         if hasattr(self, '_account_dialog') and self._account_dialog and self.page:
-            self.page.close(self._account_dialog)
+            self.page.pop_dialog()
         
         # 重新构建并显示快速登录对话框（显示选中的账号）
         self._build_quick_login_dialog()
         if self.dialog and self.page:
-            self.page.open(self.dialog)
+            self.page.show_dialog(self.dialog)
     
     def _on_qrcode_click(self, e):
         self.is_qrcode_mode = True
@@ -521,12 +521,12 @@ class LoginDialog:
     def _switch_to_qrcode_mode(self):
         # 关闭当前对话框
         if self.dialog and self.page:
-            self.page.close(self.dialog)
+            self.page.pop_dialog()
         
         # 构建并显示扫码登录对话框
         self._build_qrcode_login_dialog()
         if self.dialog and self.page:
-            self.page.open(self.dialog)
+            self.page.show_dialog(self.dialog)
     
     def _on_quick_login_mode_click(self, e):
         if not self.quick_login_accounts:
@@ -545,7 +545,7 @@ class LoginDialog:
         
         # 关闭当前对话框
         if self.dialog and self.page:
-            self.page.close(self.dialog)
+            self.page.pop_dialog()
         
         # 设置默认账号
         if not self.selected_account:
@@ -554,7 +554,7 @@ class LoginDialog:
         # 构建并显示快速登录对话框
         self._build_quick_login_dialog()
         if self.dialog and self.page:
-            self.page.open(self.dialog)
+            self.page.show_dialog(self.dialog)
     
     def _on_cancel_click(self, e):
         self.close()
@@ -567,4 +567,4 @@ class LoginDialog:
         self.login_service.stop_sse_listener()
         
         if self.dialog and self.page:
-            self.page.close(self.dialog)
+            self.page.pop_dialog()
