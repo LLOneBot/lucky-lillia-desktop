@@ -199,7 +199,7 @@ class LoginDialog:
     def _build_qrcode_login_dialog(self):
         # 二维码图片
         self.qrcode_image = ft.Image(
-            src="",
+            src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
             width=180,
             height=180,
             fit="contain",
@@ -315,14 +315,13 @@ class LoginDialog:
         async def update_qrcode():
             logger.info("更新二维码UI")
             if self.qrcode_image and qrcode_info.png_base64:
-                # Flet的Image需要用src_base64，且只需要纯base64数据（不含data:image前缀）
                 png_base64 = qrcode_info.png_base64
-                if png_base64.startswith("data:"):
-                    # 去掉 data:image/png;base64, 前缀
-                    png_base64 = png_base64.split(",", 1)[1] if "," in png_base64 else png_base64
-                self.qrcode_image.src_base64 = png_base64
+                # 确保是 data URI 格式
+                if not png_base64.startswith("data:"):
+                    png_base64 = f"data:image/png;base64,{png_base64}"
+                self.qrcode_image.src = png_base64
                 self.qrcode_image.visible = True
-                logger.info("二维码图片已设置(使用src_base64)")
+                logger.info("二维码图片已设置")
             else:
                 logger.warning(f"无法设置二维码: qrcode_image={self.qrcode_image is not None}, png_base64={bool(qrcode_info.png_base64)}")
             if self.loading_indicator:
