@@ -19,6 +19,8 @@ DEFAULT_CONFIG = {
     "pmhq_path": "bin/pmhq/pmhq-win-x64.exe",
     "llbot_path": "bin/llbot/llbot.js",
     "node_path": "bin/llbot/node.exe",
+    "ffmpeg_path": "bin/llbot/ffmpeg.exe",
+    "ffprobe_path": "bin/llbot/ffprobe.exe",
     "auto_start_pmhq": False,
     "auto_start_llbot": False,
     "auto_start_bot": False,
