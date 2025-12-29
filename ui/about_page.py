@@ -157,9 +157,13 @@ class AboutPage:
         self.llbot_card.build()
         
         # 检查更新/立即更新按钮
+        self._button_text = ft.Text("检查更新")
         self.check_update_button = ft.ElevatedButton(
-            "检查更新",
-            icon=ft.Icons.CLOUD_DOWNLOAD,
+            content=ft.Row(
+                [ft.Icon(ft.Icons.CLOUD_DOWNLOAD), self._button_text],
+                tight=True,
+                spacing=8,
+            ),
             on_click=self._on_check_or_update_click,
             style=ft.ButtonStyle(
                 color=ft.Colors.ON_PRIMARY,
@@ -168,6 +172,7 @@ class AboutPage:
                 padding=ft.padding.symmetric(horizontal=24, vertical=12),
             )
         )
+        self._button_icon = self.check_update_button.content.controls[0]
         
         # 加载中指示器
         self.loading_indicator = ft.ProgressRing(
@@ -305,6 +310,7 @@ class AboutPage:
             async def update_ui():
                 self.pmhq_card.update_version(pmhq_version if pmhq_version else "未知")
                 self.llbot_card.update_version(llbot_version if llbot_version else "未知")
+                self._sync_update_status()
                 if self.page:
                     self.page.update()
             
@@ -356,11 +362,11 @@ class AboutPage:
                 
                 has_any_update = any(info.has_update for _, info in all_check_results)
                 if has_any_update:
-                    self.check_update_button.text = "立即更新"
-                    self.check_update_button.icon = ft.Icons.DOWNLOAD
+                    self._button_text.value = "立即更新"
+                    self._button_icon.name = ft.Icons.DOWNLOAD
                 else:
-                    self.check_update_button.text = "检查更新"
-                    self.check_update_button.icon = ft.Icons.CLOUD_DOWNLOAD
+                    self._button_text.value = "检查更新"
+                    self._button_icon.name = ft.Icons.CLOUD_DOWNLOAD
                 
                 if self.page:
                     self.page.update()
@@ -380,11 +386,11 @@ class AboutPage:
 
     def set_updates_found(self, updates_found: list):
         if updates_found:
-            self.check_update_button.text = "立即更新"
-            self.check_update_button.icon = ft.Icons.DOWNLOAD
+            self._button_text.value = "立即更新"
+            self._button_icon.name = ft.Icons.DOWNLOAD
         else:
-            self.check_update_button.text = "检查更新"
-            self.check_update_button.icon = ft.Icons.CLOUD_DOWNLOAD
+            self._button_text.value = "检查更新"
+            self._button_icon.name = ft.Icons.CLOUD_DOWNLOAD
         
         for component_name, update_info in updates_found:
             if component_name == "管理器":
@@ -394,11 +400,10 @@ class AboutPage:
             elif component_name == "LLBot":
                 self.llbot_card.update_check_result(update_info)
         
-        if self.page:
-            try:
-                self.page.update()
-            except:
-                pass
+        try:
+            self.check_update_button.update()
+        except:
+            pass
     
     def _start_all_updates(self):
         if not self.update_manager or not self.update_manager.has_updates:
@@ -495,8 +500,8 @@ class AboutPage:
                 if self.page:
                     self.page.pop_dialog()
                 
-                self.check_update_button.text = "检查更新"
-                self.check_update_button.icon = ft.Icons.CLOUD_DOWNLOAD
+                self._button_text.value = "检查更新"
+                self._button_icon.name = ft.Icons.CLOUD_DOWNLOAD
                 
                 self.app_card.clear_update_status()
                 self.pmhq_card.clear_update_status()
@@ -571,14 +576,14 @@ class AboutPage:
             self.page.pop_dialog()
     
     def refresh(self):
+        self._sync_update_status()
         self._load_versions()
-        
-        # 同步更新管理器的状态到卡片
+    
+    def _sync_update_status(self):
         if self.update_manager and self.update_manager.has_updates:
-            self.check_update_button.text = "立即更新"
-            self.check_update_button.icon = ft.Icons.DOWNLOAD
+            self._button_text.value = "立即更新"
+            self._button_icon.name = ft.Icons.DOWNLOAD
             
-            # 同步更新状态到卡片显示
             for name, info in self.update_manager.updates_found:
                 if name == "管理器":
                     self.app_card.update_check_result(info)
@@ -587,11 +592,5 @@ class AboutPage:
                 elif name == "LLBot":
                     self.llbot_card.update_check_result(info)
         else:
-            self.check_update_button.text = "检查更新"
-            self.check_update_button.icon = ft.Icons.CLOUD_DOWNLOAD
-        
-        if self.page:
-            try:
-                self.page.update()
-            except:
-                pass
+            self._button_text.value = "检查更新"
+            self._button_icon.name = ft.Icons.CLOUD_DOWNLOAD

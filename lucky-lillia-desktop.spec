@@ -61,13 +61,13 @@ exe = EXE(
     strip=False,
     upx=True,
     upx_exclude=[],
-    runtime_tmpdir=None,
-    console=False,  # Hide console window
+    runtime_tmpdir='C:\\LLBotTemp',  # 避免中文用户名路径导致 Flutter 启动失败
+    console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='icon.ico',  # Application icon
-    uac_admin=True,  # 请求管理员权限
+    icon='icon.ico',
+    uac_admin=True,
 )

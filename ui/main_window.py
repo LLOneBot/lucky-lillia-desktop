@@ -140,6 +140,9 @@ class MainWindow:
         self.about_page.config_manager = self.config_manager
         self.about_page.build(page)
         
+        # 注册更新发现回调，同时通知首页和关于页面
+        self.update_manager.set_updates_found_callback(self._on_updates_found)
+        
         # 创建导航栏
         self.nav_rail = ft.NavigationRail(
             selected_index=0,
@@ -372,6 +375,14 @@ class MainWindow:
     
     def _on_about_page_update_complete(self, component: str):
         self.home_page.clear_update_banner(component)
+    
+    def _on_updates_found(self, updates_found: list):
+        if self.page:
+            async def notify_pages():
+                self.about_page.set_updates_found(updates_found)
+                if self.page:
+                    self.page.update()
+            self.page.run_task(notify_pages)
     
     def _on_restart_service_after_update(self):
         import logging

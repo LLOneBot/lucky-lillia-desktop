@@ -70,6 +70,14 @@ class Downloader:
     def check_ffprobe_available(self) -> Optional[str]:
         return self.find_in_path("ffprobe.exe") or self.find_in_path("ffprobe")
 
+    def check_ffmpeg_exists(self) -> bool:
+        """先检查环境变量，再检查 bin/llbot/"""
+        return bool(self.check_ffmpeg_available()) or self.check_file_exists("bin/llbot/ffmpeg.exe")
+    
+    def check_ffprobe_exists(self) -> bool:
+        """先检查环境变量，再检查 bin/llbot/"""
+        return bool(self.check_ffprobe_available()) or self.check_file_exists("bin/llbot/ffprobe.exe")
+
     def _get_npm_tarball_url(self, package_name: str) -> str:
         return get_package_tarball_url(
             package_name, 

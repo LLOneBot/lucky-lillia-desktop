@@ -689,6 +689,9 @@ if __name__ == "__main__":
     logger.info("="*60)
     
     try:
+        # 禁用 Flutter GPU 硬件加速，解决部分机器上 Flet View 启动失败的问题
+        os.environ.setdefault("FLET_VIEW_ARGUMENTS", "--disable-gpu")
+        
         # 启动Flet应用
         ft.app(target=main)
         

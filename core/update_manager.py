@@ -37,6 +37,7 @@ class UpdateManager:
         # UI 回调
         self._on_check_start: Optional[Callable[[], None]] = None
         self._on_check_complete: Optional[Callable[[List[Tuple[str, UpdateInfo]]], None]] = None
+        self._on_updates_found: Optional[Callable[[List[Tuple[str, UpdateInfo]]], None]] = None
         self._on_download_start: Optional[Callable[[], None]] = None
         self._on_download_progress: Optional[Callable[[str, int, int], None]] = None
         self._on_download_status: Optional[Callable[[str], None]] = None
@@ -49,12 +50,21 @@ class UpdateManager:
                       on_download_progress: Optional[Callable[[str, int, int], None]] = None,
                       on_download_status: Optional[Callable[[str], None]] = None,
                       on_download_complete: Optional[Callable[[List[str], List[Tuple[str, str]], bool], None]] = None):
-        self._on_check_start = on_check_start
-        self._on_check_complete = on_check_complete
-        self._on_download_start = on_download_start
-        self._on_download_progress = on_download_progress
-        self._on_download_status = on_download_status
-        self._on_download_complete = on_download_complete
+        if on_check_start is not None:
+            self._on_check_start = on_check_start
+        if on_check_complete is not None:
+            self._on_check_complete = on_check_complete
+        if on_download_start is not None:
+            self._on_download_start = on_download_start
+        if on_download_progress is not None:
+            self._on_download_progress = on_download_progress
+        if on_download_status is not None:
+            self._on_download_status = on_download_status
+        if on_download_complete is not None:
+            self._on_download_complete = on_download_complete
+    
+    def set_updates_found_callback(self, callback: Optional[Callable[[List[Tuple[str, UpdateInfo]]], None]]):
+        self._on_updates_found = callback
     
     @property
     def has_updates(self) -> bool:
@@ -158,6 +168,8 @@ class UpdateManager:
             
             if updates_found:
                 logger.info(f"发现 {len(updates_found)} 个更新: {[name for name, _ in updates_found]}")
+                if self._on_updates_found:
+                    self._on_updates_found(updates_found)
             else:
                 logger.info("所有组件已是最新版本")
             
@@ -195,6 +207,10 @@ class UpdateManager:
                 return
             self._is_downloading = True
             updates_to_download = self._updates_found.copy()
+        
+        # 按顺序排序：LLBot → PMHQ → 管理器（管理器最后更新，避免重启弹框打断其他更新）
+        order = {"LLBot": 0, "PMHQ": 1, "管理器": 2}
+        updates_to_download.sort(key=lambda x: order.get(x[0], 99))
         
         if self._on_download_start:
             self._on_download_start()

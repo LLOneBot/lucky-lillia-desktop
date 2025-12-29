@@ -929,13 +929,9 @@ class HomePage:
         pmhq_path = config.get("pmhq_path", DEFAULT_CONFIG["pmhq_path"])
         llbot_path = config.get("llbot_path", DEFAULT_CONFIG["llbot_path"])
         node_path = config.get("node_path", DEFAULT_CONFIG["node_path"])
-        ffmpeg_path = config.get("ffmpeg_path", DEFAULT_CONFIG["ffmpeg_path"])
-        ffprobe_path = config.get("ffprobe_path", DEFAULT_CONFIG["ffprobe_path"])
         logger.info(f"PMHQ路径: {pmhq_path}")
         logger.info(f"LLBot路径: {llbot_path}")
         logger.info(f"Node.exe路径: {node_path}")
-        logger.info(f"FFmpeg.exe路径: {ffmpeg_path}")
-        logger.info(f"FFprobe.exe路径: {ffprobe_path}")
         
         # 检查PMHQ文件是否存在
         pmhq_exists = self.downloader.check_file_exists(pmhq_path)
@@ -969,40 +965,24 @@ class HomePage:
                     self.config_manager.save_config(config)
         logger.info(f"Node.exe可用: {node_exists}")
         
-        # 检查FFmpeg.exe文件是否存在（先检查配置路径，再检查环境变量，最后检查bin/llbot/ffmpeg.exe）
-        ffmpeg_exists = self.downloader.check_file_exists(ffmpeg_path)
-        if not ffmpeg_exists:
+        # 检查FFmpeg.exe是否存在（先检查环境变量，再检查bin/llbot/）
+        ffmpeg_exists = self.downloader.check_ffmpeg_exists()
+        if ffmpeg_exists:
             system_ffmpeg = self.downloader.check_ffmpeg_available()
             if system_ffmpeg:
                 logger.info(f"在系统PATH中找到FFmpeg: {system_ffmpeg}")
-                ffmpeg_exists = True
-                config["ffmpeg_path"] = system_ffmpeg
-                self.config_manager.save_config(config)
             else:
-                local_ffmpeg_path = "bin/llbot/ffmpeg.exe"
-                if self.downloader.check_file_exists(local_ffmpeg_path):
-                    logger.info(f"在本地目录找到FFmpeg: {local_ffmpeg_path}")
-                    ffmpeg_exists = True
-                    config["ffmpeg_path"] = local_ffmpeg_path
-                    self.config_manager.save_config(config)
+                logger.info("在本地目录找到FFmpeg: bin/llbot/ffmpeg.exe")
         logger.info(f"FFmpeg.exe可用: {ffmpeg_exists}")
         
-        # 检查FFprobe.exe文件是否存在（先检查配置路径，再检查环境变量，最后检查bin/llbot/ffprobe.exe）
-        ffprobe_exists = self.downloader.check_file_exists(ffprobe_path)
-        if not ffprobe_exists:
+        # 检查FFprobe.exe是否存在（先检查环境变量，再检查bin/llbot/）
+        ffprobe_exists = self.downloader.check_ffprobe_exists()
+        if ffprobe_exists:
             system_ffprobe = self.downloader.check_ffprobe_available()
             if system_ffprobe:
                 logger.info(f"在系统PATH中找到FFprobe: {system_ffprobe}")
-                ffprobe_exists = True
-                config["ffprobe_path"] = system_ffprobe
-                self.config_manager.save_config(config)
             else:
-                local_ffprobe_path = "bin/llbot/ffprobe.exe"
-                if self.downloader.check_file_exists(local_ffprobe_path):
-                    logger.info(f"在本地目录找到FFprobe: {local_ffprobe_path}")
-                    ffprobe_exists = True
-                    config["ffprobe_path"] = local_ffprobe_path
-                    self.config_manager.save_config(config)
+                logger.info("在本地目录找到FFprobe: bin/llbot/ffprobe.exe")
         logger.info(f"FFprobe.exe可用: {ffprobe_exists}")
         
         # 检查LLBot文件是否存在
@@ -1108,10 +1088,8 @@ class HomePage:
                 if not node_exists:
                     self._show_node_download_dialog()
                 else:
-                    ffmpeg_path = config.get("ffmpeg_path", DEFAULT_CONFIG["ffmpeg_path"])
-                    ffprobe_path = config.get("ffprobe_path", DEFAULT_CONFIG["ffprobe_path"])
-                    ffmpeg_exists = self.downloader.check_file_exists(ffmpeg_path)
-                    ffprobe_exists = self.downloader.check_file_exists(ffprobe_path)
+                    ffmpeg_exists = self.downloader.check_ffmpeg_exists()
+                    ffprobe_exists = self.downloader.check_ffprobe_exists()
                     
                     if not ffmpeg_exists or not ffprobe_exists:
                         self._show_ffmpeg_download_dialog()
@@ -1311,11 +1289,8 @@ class HomePage:
                 if self.page:
                     self.page.pop_dialog()
                 
-                config = self.config_manager.load_config()
-                ffmpeg_path = config.get("ffmpeg_path", DEFAULT_CONFIG["ffmpeg_path"])
-                ffprobe_path = config.get("ffprobe_path", DEFAULT_CONFIG["ffprobe_path"])
-                ffmpeg_exists = self.downloader.check_file_exists(ffmpeg_path)
-                ffprobe_exists = self.downloader.check_file_exists(ffprobe_path)
+                ffmpeg_exists = self.downloader.check_ffmpeg_exists()
+                ffprobe_exists = self.downloader.check_ffprobe_exists()
                 
                 if not ffmpeg_exists or not ffprobe_exists:
                     self._show_ffmpeg_download_dialog()
