@@ -727,12 +727,21 @@ class MainWindow:
     
     def _on_tray_show(self, icon=None, item=None):
         if self.page:
-            self.page.window.visible = True
-            # 如果窗口被最小化，先恢复窗口
-            if self.page.window.minimized:
-                self.page.window.minimized = False
-            self.page.window.focused = True
-            self.page.update()
+            # pystray 回调在非主线程，需要通过 run_thread 确保 UI 操作在主线程执行
+            def restore_window():
+                if self.page:
+                    self.page.window.visible = True
+                    if self.page.window.minimized:
+                        self.page.window.minimized = False
+                    self.page.window.focused = True
+                    try:
+                        self.page.update()
+                    except Exception:
+                        pass
+            try:
+                self.page.run_thread(restore_window)
+            except Exception:
+                pass
     
     def _on_tray_exit(self, icon=None, item=None):
         # 停止托盘图标

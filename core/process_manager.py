@@ -150,13 +150,20 @@ class ProcessManager:
                 time.sleep(0.5)
                 return_code = process.poll()
                 if return_code is not None:
-                    # 进程已经退出，启动失败
                     stdout, stderr = process.communicate(timeout=1)
-                    logger.error(f"PMHQ进程立即退出，返回码: {return_code}")
-                    logger.error(f"PMHQ stdout: {stdout}")
-                    logger.error(f"PMHQ stderr: {stderr}")
-                    self._status["pmhq"] = ProcessStatus.ERROR
-                    return False
+                    # PMHQ 启动 QQ 后会正常退出（返回码 0），这是预期行为
+                    if return_code == 0:
+                        logger.info(f"PMHQ进程正常退出，返回码: {return_code}")
+                        self._status["pmhq"] = ProcessStatus.RUNNING
+                        self._start_monitoring()
+                        self._start_uin_fetch()
+                        return True
+                    else:
+                        logger.error(f"PMHQ进程异常退出，返回码: {return_code}")
+                        logger.error(f"PMHQ stdout: {stdout}")
+                        logger.error(f"PMHQ stderr: {stderr}")
+                        self._status["pmhq"] = ProcessStatus.ERROR
+                        return False
                 
                 self._processes["pmhq"] = process
                 self._status["pmhq"] = ProcessStatus.RUNNING
