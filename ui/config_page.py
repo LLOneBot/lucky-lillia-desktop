@@ -4,9 +4,11 @@ import flet as ft
 import tkinter as tk
 from tkinter import filedialog
 import threading
+import subprocess
 from typing import Optional, Callable
 from pathlib import Path
 from core.config_manager import ConfigManager, ConfigError
+from utils.startup_manager import is_startup_enabled, enable_startup, disable_startup
 
 
 def _pick_file_native(callback, title="选择文件", filetypes=None, initial_dir=None):
@@ -130,6 +132,35 @@ class ConfigPage:
             value=self.current_config.get("minimize_to_tray_on_start", False),
         )
         
+        self.startup_checkbox = ft.Checkbox(
+            label="开机自启",
+            value=is_startup_enabled(),
+            on_change=self._on_startup_change,
+        )
+        
+        self.startup_command_enabled_checkbox = ft.Checkbox(
+            label="启用启动后自动运行命令",
+            value=self.current_config.get("startup_command_enabled", False),
+        )
+        
+        self.startup_command_field = ft.TextField(
+            label="启动后自动运行命令",
+            hint_text="启动后将以多进程形式运行此命令",
+            value=self.current_config.get("startup_command", ""),
+            multiline=True,
+            min_lines=2,
+            max_lines=4,
+            expand=True,
+        )
+        
+        self.test_command_button = ft.ElevatedButton(
+            content=ft.Row([
+                ft.Icon(ft.Icons.PLAY_ARROW, size=18),
+                ft.Text("测试命令"),
+            ], spacing=4, tight=True),
+            on_click=self._on_test_command,
+        )
+        
         # 日志设置字段
         self.log_save_enabled_checkbox = ft.Checkbox(
             label="保存日志到文件",
@@ -192,6 +223,13 @@ class ConfigPage:
                         self.auto_start_bot_checkbox,
                         self.headless_checkbox,
                         self.minimize_to_tray_on_start_checkbox,
+                        self.startup_checkbox,
+                        ft.Divider(height=16),
+                        ft.Row([
+                            self.startup_command_enabled_checkbox,
+                            self.test_command_button,
+                        ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                        self.startup_command_field,
                     ], spacing=16),
                     padding=24,
                 ),
@@ -360,6 +398,76 @@ class ConfigPage:
             initial_dir=initial_dir
         )
     
+    def _on_startup_change(self, e):
+        if e.control.value:
+            # 勾选开机自启时，检查是否填入了自动登录QQ号
+            auto_login_qq = self.auto_login_qq_field.value.strip()
+            if not auto_login_qq:
+                self._show_startup_confirm_dialog()
+            else:
+                self._enable_startup_and_auto_start()
+        else:
+            disable_startup()
+    
+    def _show_startup_confirm_dialog(self):
+        def on_confirm(e):
+            if self._page:
+                self._page.pop_dialog()
+            self._enable_startup_and_auto_start()
+        
+        def on_cancel(e):
+            if self._page:
+                self._page.pop_dialog()
+            self.startup_checkbox.value = False
+            if self._page:
+                self._page.update()
+        
+        dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("提示"),
+            content=ft.Text("没有填入自动登录QQ号，确定依然要开机自启？"),
+            actions=[
+                ft.TextButton("取消", on_click=on_cancel),
+                ft.TextButton("确定", on_click=on_confirm),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        
+        if self._page:
+            self._page.show_dialog(dialog)
+    
+    def _enable_startup_and_auto_start(self):
+        if enable_startup():
+            # 同时勾选"启动后自动启动bot"
+            self.auto_start_bot_checkbox.value = True
+            if self._page:
+                self._page.update()
+        else:
+            self.startup_checkbox.value = False
+            self._show_error("启用开机自启失败")
+            if self._page:
+                self._page.update()
+    
+    def _on_test_command(self, e):
+        command = self.startup_command_field.value.strip()
+        if not command:
+            self._show_error("请先输入要测试的命令")
+            return
+        
+        def run_command():
+            try:
+                # 使用 start 命令在新窗口中运行，这样可以看到输出
+                process = subprocess.Popen(
+                    f'start cmd /c "{command} & pause"',
+                    shell=True,
+                    creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
+                )
+                self._show_success("命令已在新窗口中启动")
+            except Exception as ex:
+                self._show_error(f"执行命令失败: {str(ex)}")
+        
+        threading.Thread(target=run_command, daemon=True).start()
+    
     def _on_save_config(self, e):
         try:
             config = self.config_manager.load_config()
@@ -375,6 +483,8 @@ class ConfigPage:
             config["auto_start_bot"] = self.auto_start_bot_checkbox.value
             config["headless"] = self.headless_checkbox.value
             config["minimize_to_tray_on_start"] = self.minimize_to_tray_on_start_checkbox.value
+            config["startup_command_enabled"] = self.startup_command_enabled_checkbox.value
+            config["startup_command"] = self.startup_command_field.value.strip()
             config["log_save_enabled"] = self.log_save_enabled_checkbox.value
             # 解析日志保存时长（UI输入小时，保存为秒）
             retention_hours_str = self.log_retention_hours_field.value.strip()
@@ -449,6 +559,9 @@ class ConfigPage:
             self.auto_start_bot_checkbox.value = self.current_config.get("auto_start_bot", False)
             self.headless_checkbox.value = self.current_config.get("headless", False)
             self.minimize_to_tray_on_start_checkbox.value = self.current_config.get("minimize_to_tray_on_start", False)
+            self.startup_checkbox.value = is_startup_enabled()
+            self.startup_command_enabled_checkbox.value = self.current_config.get("startup_command_enabled", False)
+            self.startup_command_field.value = self.current_config.get("startup_command", "")
             self.log_save_enabled_checkbox.value = self.current_config.get("log_save_enabled", True)
             retention_seconds = self.current_config.get("log_retention_seconds", 604800)
             retention_hours = retention_seconds // 3600 if retention_seconds > 0 else 0

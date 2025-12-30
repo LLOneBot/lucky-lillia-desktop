@@ -6,7 +6,7 @@ import zipfile
 import tarfile
 import logging
 from typing import Optional, Callable
-from utils.constants import UPDATE_CHECK_TIMEOUT, NPM_PACKAGES, NPM_REGISTRY_MIRRORS, QQ_DOWNLOAD_URL
+from utils.constants import UPDATE_CHECK_TIMEOUT, NPM_PACKAGES, NPM_REGISTRY_MIRRORS, NPM_OFFICIAL_REGISTRY, QQ_DOWNLOAD_URL
 from utils.npm_api import get_package_info, get_package_tarball_url, NpmAPIError, NetworkError, TimeoutError
 from utils.http_client import HttpClient, TimeoutError as HttpTimeoutError, ConnectionError as HttpConnectionError
 
@@ -94,15 +94,20 @@ class Downloader:
         last_error = None
         client = HttpClient(timeout=self.timeout)
         
-        # 尝试从不同镜像下载
+        # tarball_url 已经是最佳下载源的URL，直接下载
+        # 如果失败，尝试替换为其他镜像源
         urls_to_try = [tarball_url]
         
-        # 如果URL是官方源，添加镜像URL
-        if "registry.npmjs.org" in tarball_url:
-            for mirror in self.registry_mirrors:
-                if mirror != "https://registry.npmjs.org":
-                    mirror_url = tarball_url.replace("https://registry.npmjs.org", mirror)
-                    urls_to_try.insert(0, mirror_url)
+        # 添加备用URL
+        all_registries = [NPM_OFFICIAL_REGISTRY] + self.registry_mirrors
+        for registry in all_registries:
+            if registry in tarball_url:
+                for other_registry in all_registries:
+                    if other_registry != registry:
+                        backup_url = tarball_url.replace(registry, other_registry)
+                        if backup_url not in urls_to_try:
+                            urls_to_try.append(backup_url)
+                break
         
         for url in urls_to_try:
             try:
@@ -131,14 +136,12 @@ class Downloader:
                 # 解压tarball
                 try:
                     with tarfile.open(temp_file, 'r:gz') as tar:
-                        # npm tarball通常包含一个package目录
                         tar.extractall(extract_dir, filter='data')
                     
                     # 移动package目录内容到目标目录
                     package_dir = os.path.join(extract_dir, "package")
                     if os.path.exists(package_dir):
                         for item in os.listdir(package_dir):
-                            # 跳过指定的文件
                             if item in skip_files:
                                 logger.info(f"跳过文件: {item}")
                                 continue
@@ -153,7 +156,6 @@ class Downloader:
                             shutil.move(src, dst)
                         shutil.rmtree(package_dir)
                     
-                    # 删除临时文件
                     os.remove(temp_file)
                     
                     logger.info(f"成功下载并解压到: {extract_dir}")

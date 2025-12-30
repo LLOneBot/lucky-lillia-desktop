@@ -777,15 +777,13 @@ class MainWindow:
     
     def _check_minimize_to_tray_on_start(self):
         try:
-            # 加载配置
             config = self.config_manager.load_config()
             minimize_to_tray_on_start = config.get("minimize_to_tray_on_start", False)
             
             if minimize_to_tray_on_start:
-                # 延迟一点执行，确保托盘已初始化
                 import threading
                 def delayed_minimize():
-                    time.sleep(2.5)  # 等待托盘初始化完成
+                    time.sleep(2.5)
                     if self.page:
                         self._minimize_to_tray()
                 
@@ -793,7 +791,6 @@ class MainWindow:
                 minimize_thread.start()
                 
         except Exception as e:
-            # 忽略自动缩进托盘过程中的错误
             import logging
             logger = logging.getLogger(__name__)
             logger.warning(f"自动缩进托盘失败: {e}")

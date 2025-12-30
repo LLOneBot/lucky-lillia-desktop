@@ -27,6 +27,8 @@ DEFAULT_CONFIG = {
     "auto_login_qq": "",
     "headless": False,
     "minimize_to_tray_on_start": False,
+    "startup_command_enabled": False,
+    "startup_command": "",
     "log_level": "info",
     "log_save_enabled": True,
     "log_retention_seconds": 86400,
@@ -57,9 +59,12 @@ GITHUB_MIRRORS = [
     "https://github.com/",
 ]
 
+NPM_OFFICIAL_REGISTRY = "https://registry.npmjs.org"
+
 NPM_REGISTRY_MIRRORS = [
-    "https://registry.npmjs.org",
     "https://registry.npmmirror.com",
+    "https://mirrors.huaweicloud.com/repository/npm",
+    "https://mirrors.cloud.tencent.com/npm"
 ]
 
 RESOURCE_MONITOR_INTERVAL = 3.0

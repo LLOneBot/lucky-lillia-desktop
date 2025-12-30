@@ -985,14 +985,18 @@ class ProcessManager:
     def _monitor_processes(self) -> None:
         """监控进程状态，检测异常退出"""
         while self._monitoring:
-            time.sleep(1)  # 每秒检查一次
+            time.sleep(1)
             
             with self._lock:
                 for process_name, process in list(self._processes.items()):
-                    # 检查进程是否已退出
-                    if process.poll() is not None:
-                        # 进程已退出
+                    return_code = process.poll()
+                    if return_code is not None:
                         if self._status[process_name] == ProcessStatus.RUNNING:
-                            # 这是异常退出
-                            self._status[process_name] = ProcessStatus.ERROR
+                            # exit code 0 表示正常退出
+                            if return_code == 0:
+                                logger.info(f"进程 {process_name} 正常退出")
+                                self._status[process_name] = ProcessStatus.STOPPED
+                            else:
+                                logger.warning(f"进程 {process_name} 异常退出，返回码: {return_code}")
+                                self._status[process_name] = ProcessStatus.ERROR
                         del self._processes[process_name]

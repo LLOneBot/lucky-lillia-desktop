@@ -1883,8 +1883,36 @@ class HomePage:
         self.is_starting = False
         self._update_button_state(True)
         self.refresh_process_resources()
+        
+        # 执行启动后自动运行命令
+        self._execute_startup_command()
+        
         if self.page:
             self.page.update()
+    
+    def _execute_startup_command(self):
+        try:
+            config = self.config_manager.load_config()
+            startup_command_enabled = config.get("startup_command_enabled", False)
+            startup_command = config.get("startup_command", "").strip()
+            
+            if startup_command_enabled and startup_command:
+                import subprocess
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.info(f"执行启动命令: {startup_command}")
+                
+                subprocess.Popen(
+                    f'cmd /c {startup_command}',
+                    shell=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+                )
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"执行启动命令失败: {e}")
     
     def _show_error_dialog(self, title: str, message: str):
         if not self.page:

@@ -36,7 +36,8 @@ class ConnectionError(HttpError):
 
 class HttpClient:
     DEFAULT_TIMEOUT = 30
-    DEFAULT_USER_AGENT = "Lucky-Lillia-Desktop"
+    DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    DOWNLOAD_CHUNK_SIZE = 1024 * 1024  # 1MB
     
     def __init__(self, timeout: int = DEFAULT_TIMEOUT, user_agent: str = DEFAULT_USER_AGENT):
         self.timeout = timeout
@@ -69,7 +70,7 @@ class HttpClient:
                 chunks = []
                 
                 while True:
-                    chunk = response.read(8192)
+                    chunk = response.read(self.DOWNLOAD_CHUNK_SIZE)
                     if not chunk:
                         break
                     chunks.append(chunk)
