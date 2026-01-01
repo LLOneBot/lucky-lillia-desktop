@@ -141,8 +141,8 @@ class PMHQClient:
         nickname = resp.result.get("nickName") or resp.result.get("nickname") or resp.result.get("nick") or ""
         return SelfInfo(uin=str(uin), nickname=nickname)
     
-    def fetch_qq_pid(self, echo: Optional[str] = None) -> Optional[int]:
-        resp = self.get_process_info(echo=echo)
+    def fetch_qq_pid(self, echo: Optional[str] = None, timeout: int = 5) -> Optional[int]:
+        resp = self.get_process_info(echo=echo, timeout=timeout)
         if not resp.success or not isinstance(resp.result, dict):
             return None
         return resp.result.get("pid")

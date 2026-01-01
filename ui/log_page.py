@@ -3,7 +3,7 @@
 import flet as ft
 import threading
 from typing import Optional, List, Tuple
-from core.log_collector import LogCollector, LogEntry
+from core.async_log_collector import AsyncLogCollector, LogEntry
 from utils.constants import MAX_LOG_LINES
 
 
@@ -13,8 +13,7 @@ class LogPage:
     MAX_DISPLAY = 100
     AUTO_REFRESH_INTERVAL = 0.5
 
-    def __init__(self, log_collector: LogCollector):
-        """初始化日志页面"""
+    def __init__(self, log_collector: AsyncLogCollector):
         self.log_collector = log_collector
         self.control: Optional[ft.Container] = None
         self._is_page_visible = False

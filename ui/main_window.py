@@ -1,9 +1,12 @@
 """主窗口模块"""
 
 import flet as ft
-from typing import Optional, Callable
+from typing import Optional, Callable, List, Dict, Any
 from core.process_manager import ProcessManager
 from core.log_collector import LogCollector
+from core.async_log_collector import AsyncLogCollector, LogEntry
+from core.async_monitor import AsyncResourceMonitor
+from core.async_app import AsyncApp
 from core.config_manager import ConfigManager
 from core.version_detector import VersionDetector
 from core.update_checker import UpdateChecker
@@ -26,6 +29,7 @@ from utils.constants import (
 from utils.downloader import Downloader
 import threading
 import time
+import asyncio
 
 
 class MainWindow:
@@ -36,21 +40,20 @@ class MainWindow:
                  log_collector: LogCollector,
                  config_manager: ConfigManager,
                  version_detector: VersionDetector,
-                 update_checker: UpdateChecker):
-        """初始化主窗口
-        
-        Args:
-            process_manager: 进程管理器实例
-            log_collector: 日志收集器实例
-            config_manager: 配置管理器实例
-            version_detector: 版本检测器实例
-            update_checker: 更新检查器实例
-        """
+                 update_checker: UpdateChecker,
+                 async_app: Optional[AsyncApp] = None,
+                 async_log_collector: Optional[AsyncLogCollector] = None,
+                 async_resource_monitor: Optional[AsyncResourceMonitor] = None):
         self.process_manager = process_manager
         self.log_collector = log_collector
         self.config_manager = config_manager
         self.version_detector = version_detector
         self.update_checker = update_checker
+        
+        # 异步组件
+        self.async_app = async_app
+        self.async_log_collector = async_log_collector
+        self.async_resource_monitor = async_resource_monitor
         
         # 创建更新管理器
         self.update_manager = UpdateManager(
@@ -106,7 +109,9 @@ class MainWindow:
             log_collector=self.log_collector,
             on_navigate_logs=lambda: self._navigate_to(1),
             version_detector=self.version_detector,
-            update_manager=self.update_manager
+            update_manager=self.update_manager,
+            async_log_collector=self.async_log_collector,
+            async_resource_monitor=self.async_resource_monitor
         )
         self.home_page.build()
         self.home_page.set_page(page)  # 设置页面引用以显示对话框
@@ -117,7 +122,7 @@ class MainWindow:
         # 进入控制面板时检查更新
         self.home_page.check_for_updates()
         
-        self.log_page = LogPage(self.log_collector)
+        self.log_page = LogPage(self.async_log_collector)
         self.log_page.build()
         
         self.config_page = ConfigPage(
@@ -272,8 +277,8 @@ class MainWindow:
         tray_setup_thread = threading.Thread(target=delayed_tray_setup, daemon=True)
         tray_setup_thread.start()
         
-        # 启动资源监控
-        self._start_resource_monitoring()
+        # 启动异步资源监控（替代旧的线程监控）
+        self._start_async_monitoring()
         
         # 刷新首页进程资源
         self.home_page.refresh_process_resources()
@@ -363,9 +368,15 @@ class MainWindow:
         self.avatar_image.visible = True
         self.avatar_icon.visible = False
         
-        if self.page:
+        page = self.page
+        if page:
+            async def do_update():
+                try:
+                    page.update()
+                except Exception:
+                    pass
             try:
-                self.page.run_thread(lambda: self.page.update() if self.page else None)
+                page.run_task(do_update)
             except Exception:
                 pass
     
@@ -396,8 +407,14 @@ class MainWindow:
     def _update_window_title(self, uin: str, nickname: str):
         if self.page and uin and nickname:
             self.page.title = f"{APP_NAME} -- {nickname}({uin})"
+            page = self.page
+            async def do_update():
+                try:
+                    page.update()
+                except Exception:
+                    pass
             try:
-                self.page.run_thread(lambda: self.page.update() if self.page else None)
+                page.run_task(do_update)
             except Exception:
                 pass
             self._update_tray_title()
@@ -523,10 +540,22 @@ class MainWindow:
     
     def _cleanup(self, force_cleanup: bool = False):
         self.monitoring_resources = False
-        self._stop_monitoring_event.set()  # 立即中断 Event.wait()
+        self._stop_monitoring_event.set()
         if self.resource_monitor_thread and self.resource_monitor_thread.is_alive():
-            timeout = 0.1 if force_cleanup else 0.2  # 减少等待时间
+            timeout = 0.1 if force_cleanup else 0.2
             self.resource_monitor_thread.join(timeout=timeout)
+        
+        # 停止异步应用
+        if self.async_app and self.page:
+            async def stop_async():
+                try:
+                    await self.async_app.stop()
+                except Exception:
+                    pass
+            try:
+                self.page.run_task(stop_async)
+            except Exception:
+                pass
         
         # 清理日志页面资源
         if hasattr(self, 'log_page') and self.log_page:
@@ -539,7 +568,6 @@ class MainWindow:
         # 停止托盘图标
         if self.tray_icon:
             try:
-                # 总是异步停止托盘，避免阻塞
                 def stop_tray():
                     try:
                         self.tray_icon.stop()
@@ -726,9 +754,9 @@ class MainWindow:
         return img
     
     def _on_tray_show(self, icon=None, item=None):
-        if self.page:
-            # pystray 回调在非主线程，需要通过 run_thread 确保 UI 操作在主线程执行
-            def restore_window():
+        page = self.page
+        if page:
+            async def restore_window():
                 if self.page:
                     self.page.window.visible = True
                     if self.page.window.minimized:
@@ -739,7 +767,7 @@ class MainWindow:
                     except Exception:
                         pass
             try:
-                self.page.run_thread(restore_window)
+                page.run_task(restore_window)
             except Exception:
                 pass
     
@@ -750,10 +778,58 @@ class MainWindow:
         # 执行关闭
         self._do_close()
     
+    def _start_async_monitoring(self):
+        """启动异步资源监控"""
+        if not self.async_app or not self.page:
+            # 回退到旧的线程监控
+            self._start_resource_monitoring()
+            return
+        
+        # 设置异步资源监控器的 PMHQ 端口
+        pmhq_port = self.process_manager.get_pmhq_port()
+        if pmhq_port:
+            self.async_resource_monitor.set_pmhq_port(pmhq_port)
+        
+        self.async_resource_monitor.set_uin_callback(self._on_uin_received)
+        
+        async def on_logs_updated(new_logs: List[LogEntry]):
+            if self.current_page_index == 0 and self.page:
+                logs = self.async_log_collector.get_recent_logs(10)
+                log_entries = [
+                    {
+                        "timestamp": log.timestamp.strftime("%H:%M:%S"),
+                        "process_name": log.process_name,
+                        "level": log.level,
+                        "message": log.message,
+                    }
+                    for log in logs
+                ]
+                self.home_page.refresh_logs(log_entries)
+                try:
+                    self.page.update()
+                except Exception:
+                    pass
+        
+        async def on_resources_updated(data: Dict[str, Any]):
+            if self.current_page_index == 0 and self.page:
+                self.home_page.refresh_process_resources()
+                try:
+                    self.page.update()
+                except Exception:
+                    pass
+        
+        self.async_app.set_logs_callback(on_logs_updated)
+        self.async_app.set_resources_callback(on_resources_updated)
+        
+        async def start_async_app():
+            await self.async_app.start()
+        
+        self.page.run_task(start_async_app)
+    
     def _start_resource_monitoring(self):
         if not self.monitoring_resources:
             self.monitoring_resources = True
-            self._stop_monitoring_event.clear()  # 重置停止事件
+            self._stop_monitoring_event.clear()
             self.resource_monitor_thread = threading.Thread(
                 target=self._monitor_resources,
                 daemon=True
@@ -808,7 +884,10 @@ class MainWindow:
         while self.monitoring_resources:
             try:
                 if self.current_page_index == 0 and self.page:
-                    self.home_page.refresh_process_resources()
+                    try:
+                        self.home_page.refresh_process_resources()
+                    except Exception:
+                        pass
                     
                     logs = self.log_collector.get_recent_logs(10)
                     log_entries = [
@@ -822,16 +901,15 @@ class MainWindow:
                     ]
                     self.home_page.refresh_logs(log_entries)
                     
-                    # 使用 run_thread 确保 UI 更新在主线程执行，避免竞态条件
-                    if self.page:
-                        def safe_update():
+                    page = self.page
+                    if page:
+                        async def do_update():
                             try:
-                                if self.page:
-                                    self.page.update()
+                                page.update()
                             except Exception:
                                 pass
                         try:
-                            self.page.run_thread(safe_update)
+                            page.run_task(do_update)
                         except Exception:
                             pass
                 

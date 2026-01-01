@@ -312,14 +312,14 @@ class LLBotConfigPage:
             )
             self._connect_tab_contents.append(content)
             
-            tab_btn = ft.TextButton(
-                tab_name,
+            tab_btn = ft.Container(
+                content=ft.Text(tab_name, color=ft.Colors.PRIMARY if i == self._connect_tab_index else ft.Colors.ON_SURFACE),
+                padding=ft.padding.symmetric(horizontal=16, vertical=8),
+                border=ft.border.only(bottom=ft.BorderSide(2, ft.Colors.PRIMARY)) if i == self._connect_tab_index else None,
+                bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY) if i == self._connect_tab_index else None,
+                border_radius=ft.border_radius.only(top_left=8, top_right=8),
                 on_click=lambda e, idx=i: self._switch_tab(idx),
-                style=ft.ButtonStyle(
-                    color={
-                        ft.ControlState.DEFAULT: ft.Colors.PRIMARY if i == self._connect_tab_index else ft.Colors.ON_SURFACE,
-                    }
-                )
+                ink=True,
             )
             self._connect_tab_buttons.controls.append(tab_btn)
         
@@ -338,14 +338,14 @@ class LLBotConfigPage:
         )
         self._connect_tab_contents.append(add_content)
         
-        add_btn = ft.TextButton(
-            "+",
+        add_btn = ft.Container(
+            content=ft.Text("+", color=ft.Colors.PRIMARY if self._connect_tab_index == len(connects) else ft.Colors.ON_SURFACE),
+            padding=ft.padding.symmetric(horizontal=16, vertical=8),
+            border=ft.border.only(bottom=ft.BorderSide(2, ft.Colors.PRIMARY)) if self._connect_tab_index == len(connects) else None,
+            bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY) if self._connect_tab_index == len(connects) else None,
+            border_radius=ft.border_radius.only(top_left=8, top_right=8),
             on_click=lambda e: self._switch_tab(len(self._connect_tab_contents) - 1),
-            style=ft.ButtonStyle(
-                color={
-                    ft.ControlState.DEFAULT: ft.Colors.PRIMARY if self._connect_tab_index == len(connects) else ft.Colors.ON_SURFACE,
-                }
-            )
+            ink=True,
         )
         self._connect_tab_buttons.controls.append(add_btn)
         
@@ -356,15 +356,13 @@ class LLBotConfigPage:
     
     def _switch_tab(self, index: int):
         self._connect_tab_index = index
-        # 更新按钮样式
         for i, btn in enumerate(self._connect_tab_buttons.controls):
-            if isinstance(btn, ft.TextButton):
-                btn.style = ft.ButtonStyle(
-                    color={
-                        ft.ControlState.DEFAULT: ft.Colors.PRIMARY if i == index else ft.Colors.ON_SURFACE,
-                    }
-                )
-        # 更新内容
+            if isinstance(btn, ft.Container):
+                is_selected = i == index
+                btn.border = ft.border.only(bottom=ft.BorderSide(2, ft.Colors.PRIMARY)) if is_selected else None
+                btn.bgcolor = ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY) if is_selected else None
+                if btn.content and isinstance(btn.content, ft.Text):
+                    btn.content.color = ft.Colors.PRIMARY if is_selected else ft.Colors.ON_SURFACE
         if 0 <= index < len(self._connect_tab_contents):
             self._connect_tab_content.content = self._connect_tab_contents[index]
         self._try_update()

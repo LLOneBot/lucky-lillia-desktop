@@ -13,6 +13,9 @@ from logging.handlers import BaseRotatingHandler
 
 from core.process_manager import ProcessManager, is_admin
 from core.log_collector import LogCollector
+from core.async_log_collector import AsyncLogCollector
+from core.async_monitor import AsyncResourceMonitor
+from core.async_app import AsyncApp
 from core.config_manager import ConfigManager
 from core.version_detector import VersionDetector
 from core.update_checker import UpdateChecker
@@ -399,9 +402,18 @@ def initialize_managers():
         logger.info("初始化进程管理器...")
         process_manager = ProcessManager()
         
-        # 初始化日志收集器
+        # 初始化日志收集器（同时初始化同步和异步版本）
         logger.info(f"初始化日志收集器（最大行数: {MAX_LOG_LINES}）...")
         log_collector = LogCollector(max_lines=MAX_LOG_LINES)
+        async_log_collector = AsyncLogCollector(max_lines=MAX_LOG_LINES)
+        
+        # 初始化异步资源监控器
+        logger.info("初始化异步资源监控器...")
+        async_resource_monitor = AsyncResourceMonitor()
+        
+        # 初始化异步应用管理器
+        logger.info("初始化异步应用管理器...")
+        async_app = AsyncApp(async_log_collector, async_resource_monitor)
         
         # 初始化配置管理器
         logger.info("初始化配置管理器...")
@@ -427,6 +439,9 @@ def initialize_managers():
         return {
             'process_manager': process_manager,
             'log_collector': log_collector,
+            'async_log_collector': async_log_collector,
+            'async_resource_monitor': async_resource_monitor,
+            'async_app': async_app,
             'config_manager': config_manager,
             'version_detector': version_detector,
             'update_checker': update_checker
@@ -602,7 +617,10 @@ def main(page: ft.Page):
                     log_collector=managers['log_collector'],
                     config_manager=managers['config_manager'],
                     version_detector=managers['version_detector'],
-                    update_checker=managers['update_checker']
+                    update_checker=managers['update_checker'],
+                    async_app=managers['async_app'],
+                    async_log_collector=managers['async_log_collector'],
+                    async_resource_monitor=managers['async_resource_monitor']
                 )
                 
                 # 构建UI

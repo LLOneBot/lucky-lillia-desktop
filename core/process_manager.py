@@ -77,10 +77,23 @@ class ProcessManager:
         logger.info(f"尝试启动PMHQ: path={pmhq_path}, config={config_path}, qq_path={qq_path}, auto_login_qq={auto_login_qq}, headless={headless}")
         
         with self._lock:
-            # 检查是否已经在运行
+            # 检查是否已经在运行（需要同时检查状态和实际进程）
             if self._status.get("pmhq") == ProcessStatus.RUNNING:
-                logger.info("PMHQ已经在运行中")
-                return True
+                # 检查是否真的有进程在运行
+                process = self._processes.get("pmhq")
+                admin_pid = self._admin_pids.get("pmhq")
+                if process and process.poll() is None:
+                    logger.info("PMHQ已经在运行中")
+                    return True
+                elif admin_pid:
+                    import psutil
+                    if psutil.pid_exists(admin_pid):
+                        logger.info("PMHQ已经在运行中（管理员模式）")
+                        return True
+                # 状态是 RUNNING 但进程不存在，重置状态
+                self._status["pmhq"] = ProcessStatus.STOPPED
+                if process:
+                    del self._processes["pmhq"]
             
             # 验证可执行文件路径
             if not os.path.isfile(pmhq_path):
@@ -844,7 +857,8 @@ class ProcessManager:
         if self._pmhq_port is None:
             return None
         if self._pmhq_client is None or self._pmhq_client.port != self._pmhq_port:
-            self._pmhq_client = PMHQClient(self._pmhq_port, timeout=5)
+            # 使用较短的超时时间，避免阻塞UI
+            self._pmhq_client = PMHQClient(self._pmhq_port, timeout=2)
         return self._pmhq_client
     
     def fetch_qq_process_info(self) -> Optional[int]:
@@ -876,7 +890,8 @@ class ProcessManager:
             return None
         
         import uuid
-        pid = client.fetch_qq_pid(echo=str(uuid.uuid4()))
+        # 使用较短的超时，避免阻塞UI
+        pid = client.fetch_qq_pid(echo=str(uuid.uuid4()), timeout=2)
         
         if pid:
             with self._lock:

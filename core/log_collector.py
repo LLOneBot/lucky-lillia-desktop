@@ -28,6 +28,7 @@ class LogCollector:
         self._lock = threading.Lock()
         self._callbacks: List[Callable[[LogEntry], None]] = []
         self._reader_threads: Dict[str, List[threading.Thread]] = {}
+        self._running = True
     
     def _write_to_log_file(self, entry: LogEntry) -> None:
         log_level = logging.INFO if entry.level == "stdout" else logging.WARNING
@@ -69,9 +70,8 @@ class LogCollector:
         logger.info(f"开始读取 {process_name} 的 PTY 流")
         
         try:
-            while pty_process.isalive():
+            while self._running and pty_process.isalive():
                 try:
-                    # 读取一行输出
                     line = pty_process.readline()
                     if line:
                         line = line.rstrip('\n\r')
@@ -86,10 +86,8 @@ class LogCollector:
                             with self._lock:
                                 self._logs.append(entry)
                             
-                            # 写入日志文件
                             self._write_to_log_file(entry)
                             
-                            # 调用回调函数（复制列表避免迭代时修改）
                             with self._lock:
                                 callbacks = self._callbacks.copy()
                             for callback in callbacks:
@@ -109,14 +107,14 @@ class LogCollector:
         logger.info(f"开始读取 {process_name} 的 {level} 流")
         
         try:
-            while True:
+            while self._running:
                 line = stream.readline()
-                if not line:  # 流结束
+                if not line:
                     logger.info(f"{process_name} 的 {level} 流已结束")
                     break
                 
                 line = line.rstrip('\n\r')
-                if line:  # 确保不是空行
+                if line:
                     entry = LogEntry(
                         timestamp=datetime.now(),
                         process_name=process_name,
@@ -127,10 +125,8 @@ class LogCollector:
                     with self._lock:
                         self._logs.append(entry)
                     
-                    # 写入日志文件
                     self._write_to_log_file(entry)
                     
-                    # 调用回调函数（复制列表避免迭代时修改）
                     with self._lock:
                         callbacks = self._callbacks.copy()
                     for callback in callbacks:
@@ -190,5 +186,11 @@ class LogCollector:
     def clear_callbacks(self) -> None:
         with self._lock:
             self._callbacks.clear()
+    
+    def stop(self) -> None:
+        self._running = False
+    
+    def reset(self) -> None:
+        self._running = True
 
 

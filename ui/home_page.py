@@ -137,15 +137,18 @@ class ProcessResourceCard:
             self.status_text.value = "未启动"
             self.status_text.color = ft.Colors.GREY_600
         
-        # 除以核心数得到相对于整个系统的百分比
         cpu_count = psutil.cpu_count() or 1
         normalized_cpu = cpu_percent / cpu_count
         self.cpu_text.value = f"CPU: {normalized_cpu:.1f}%"
-        self.cpu_progress.value = min(normalized_cpu / 100.0, 1.0)
+        system_cpu = psutil.cpu_percent(interval=0)
+        available_cpu = 100.0 - system_cpu
+        cpu_ratio = normalized_cpu / available_cpu if available_cpu > 0 else 0
+        self.cpu_progress.value = min(cpu_ratio, 1.0)
         
         self.memory_text.value = f"内存: {memory_mb:.0f} MB"
-        total_memory_mb = psutil.virtual_memory().total / 1024 / 1024
-        self.memory_progress.value = min(memory_mb / total_memory_mb, 1.0)
+        available_memory_mb = psutil.virtual_memory().available / 1024 / 1024
+        memory_ratio = memory_mb / available_memory_mb if available_memory_mb > 0 else 0
+        self.memory_progress.value = min(memory_ratio, 1.0)
         
         if version and self._version_text:
             self._version_text.value = version
@@ -399,14 +402,8 @@ class LogPreviewCard:
                 else:
                     row.visible = False
             
-            # scroll_to 在 Flet 0.80 中是异步方法，在同步上下文中使用 run_task
-            if self.page:
-                async def do_scroll():
-                    try:
-                        await self.log_list.scroll_to(offset=-1, duration=100)
-                    except Exception:
-                        pass
-                self.page.run_task(do_scroll)
+            # scroll_to 在 Flet 0.80 中是异步方法，跳过自动滚动避免频繁调用
+            # 用户可以手动滚动查看最新日志
 
 
 class HomePage:
@@ -417,20 +414,14 @@ class HomePage:
                  log_collector=None,
                  on_navigate_logs: Optional[Callable] = None,
                  version_detector: Optional[VersionDetector] = None,
-                 update_manager=None):
-        """初始化首页
-        
-        Args:
-            process_manager: 进程管理器实例
-            config_manager: 配置管理器实例
-            log_collector: 日志收集器实例（可选）
-            on_navigate_logs: 导航到日志页面的回调
-            version_detector: 版本检测器实例（可选）
-            update_manager: 更新管理器实例（可选）
-        """
+                 update_manager=None,
+                 async_log_collector=None,
+                 async_resource_monitor=None):
         self.process_manager = process_manager
         self.config_manager = config_manager
         self.log_collector = log_collector
+        self.async_log_collector = async_log_collector
+        self.async_resource_monitor = async_resource_monitor
         self.on_navigate_logs = on_navigate_logs
         self.version_detector = version_detector or VersionDetector()
         self.update_manager = update_manager
@@ -457,10 +448,15 @@ class HomePage:
         self.is_starting = False
     
     def _safe_update(self):
-        """线程安全的 UI 更新，确保在主线程执行"""
-        if self.page:
+        page = self.page
+        if page:
+            async def do_update():
+                try:
+                    page.update()
+                except Exception:
+                    pass
             try:
-                self.page.run_thread(lambda: self.page.update() if self.page else None)
+                page.run_task(do_update)
             except Exception:
                 pass
         
@@ -826,24 +822,18 @@ class HomePage:
             self.page.show_dialog(dialog)
     
     def _do_stop_services(self, stop_qq: bool = False):
-        """实际执行停止服务
-        
-        Args:
-            stop_qq: 是否同时停止QQ进程
-        """
         import logging
         logger = logging.getLogger(__name__)
         logger.info(f"停止所有服务, stop_qq={stop_qq}")
         
         try:
-            # 停止所有托管进程（包括QQ进程，如果stop_qq为True）
+            if self.async_log_collector:
+                self.async_log_collector.stop()
+            
             self.process_manager.stop_all(stop_qq=stop_qq)
             logger.info("所有服务已停止")
             
-            # 更新按钮状态
             self._update_button_state(False)
-            
-            # 刷新进程资源显示
             self.refresh_process_resources()
             if self.page:
                 self.page.update()
@@ -856,7 +846,7 @@ class HomePage:
         import logging
         import shutil
         from datetime import datetime
-        from core.log_collector import LogEntry
+        from core.async_log_collector import LogEntry
         logger = logging.getLogger(__name__)
         logger.info("全局启动按钮被点击")
         
@@ -870,7 +860,10 @@ class HomePage:
         
         self.is_starting = True
         
-        # 立即更新按钮状态为"启动中"，提供即时反馈
+        # 重置日志收集器，确保新启动的进程日志能被收集
+        if self.async_log_collector:
+            self.async_log_collector.reset()
+        
         self._start_button_text.value = "启动中"
         self._start_button_icon.name = ft.Icons.HOURGLASS_EMPTY
         self.global_start_button.style = ft.ButtonStyle(
@@ -881,15 +874,14 @@ class HomePage:
         if self.page:
             self.page.update()
         
-        # 添加"正在启动..."日志
-        if self.log_collector:
+        if self.async_log_collector:
             entry = LogEntry(
                 timestamp=datetime.now(),
                 process_name="系统",
                 level="stdout",
                 message="正在启动..."
             )
-            self.log_collector._logs.append(entry)
+            self.async_log_collector._logs.append(entry)
             self._refresh_log_preview()
         
         # 延迟执行启动逻辑，让 UI 先更新
@@ -1672,19 +1664,22 @@ class HomePage:
                 if pmhq_success:
                     pmhq_pid = self.process_manager.get_pid("pmhq")
                     logger.info(f"PMHQ启动成功，PID: {pmhq_pid}")
-                    # 将PMHQ进程附加到日志收集器
-                    if self.log_collector:
-                        pmhq_process = self.process_manager.get_process("pmhq")
-                        if pmhq_process:
-                            self.log_collector.attach_process("PMHQ", pmhq_process)
-                            logger.info("PMHQ进程已附加到日志收集器")
-                        else:
-                            logger.warning("PMHQ进程对象为空，无法收集日志（可能是以管理员权限单独启动的）")
+                    pmhq_process = self.process_manager.get_process("pmhq")
+                    if pmhq_process:
+                        if self.async_log_collector:
+                            self.async_log_collector.attach_process("PMHQ", pmhq_process)
+                        logger.info("PMHQ进程已附加到日志收集器")
+                    else:
+                        logger.warning("PMHQ进程对象为空，无法收集日志（可能是以管理员权限单独启动的）")
                     
-                    # 无头模式下，使用HTTP API进行登录
+                    if self.async_resource_monitor:
+                        pmhq_port = self.process_manager.get_pmhq_port()
+                        if pmhq_port:
+                            self.async_resource_monitor.set_pmhq_port(pmhq_port)
+                    
                     if headless:
                         self._handle_headless_login(auto_login_qq, config)
-                        return  # 登录流程会继续启动LLBot
+                        return
                 else:
                     logger.error("PMHQ启动失败")
                     self._update_button_state(False)
@@ -1773,6 +1768,8 @@ class HomePage:
         
         pmhq_port = self.process_manager.get_pmhq_port()
         if not pmhq_port:
+            self.is_starting = False
+            self._update_button_state(False)
             return
         
         def wait_thread():
@@ -1790,6 +1787,8 @@ class HomePage:
                 time.sleep(1)
             
             logger.warning("等待登录超时")
+            self.is_starting = False
+            self._update_button_state(False)
         
         thread = threading.Thread(target=wait_thread, daemon=True)
         thread.start()
@@ -1813,8 +1812,8 @@ class HomePage:
             import logging
             logger = logging.getLogger(__name__)
             logger.info("用户取消登录")
-            # 更新按钮状态
-            self._update_button_state(True)
+            self.is_starting = False
+            self._update_button_state(False)
             self.refresh_process_resources()
             if self.page:
                 self.page.update()
@@ -1871,11 +1870,11 @@ class HomePage:
             if llbot_success:
                 llbot_pid = self.process_manager.get_pid("llbot")
                 logger.info(f"LLBot启动成功，PID: {llbot_pid}")
-                if self.log_collector:
-                    llbot_process = self.process_manager.get_process("llbot")
-                    if llbot_process:
-                        self.log_collector.attach_process("LLBot", llbot_process)
-                        logger.info("LLBot进程已附加到日志收集器")
+                llbot_process = self.process_manager.get_process("llbot")
+                if llbot_process:
+                    if self.async_log_collector:
+                        self.async_log_collector.attach_process("LLBot", llbot_process)
+                    logger.info("LLBot进程已附加到日志收集器")
             else:
                 logger.error("LLBot启动失败")
                 self._show_error_dialog("启动失败", "LLBot启动失败")
@@ -2105,44 +2104,41 @@ class HomePage:
             cpu, mem, _ = self._get_process_resources(manager_pid)
             total_cpu += cpu
             total_mem += mem
-            logger.debug(f"管理器 - PID: {manager_pid}, CPU: {cpu:.1f}%, 内存: {mem:.1f}MB")
             
             pids = self.process_manager.get_all_pids()
             
-            # PMHQ
+            # PMHQ - 检查状态而不仅仅是 PID
             pmhq_pid = pids.get("pmhq")
-            pmhq_running = False
+            pmhq_status = self.process_manager.get_process_status("pmhq")
+            pmhq_running = pmhq_status == ProcessStatus.RUNNING
             if pmhq_pid:
-                cpu, mem, pmhq_running = self._get_process_resources(pmhq_pid)
-                if pmhq_running:
+                cpu, mem, is_alive = self._get_process_resources(pmhq_pid)
+                if is_alive:
                     total_cpu += cpu
                     total_mem += mem
-                    logger.debug(f"PMHQ - PID: {pmhq_pid}, CPU: {cpu:.1f}%, 内存: {mem:.1f}MB")
             
             # LLBot
             llbot_pid = pids.get("llbot")
-            llbot_running = False
+            llbot_status = self.process_manager.get_process_status("llbot")
+            llbot_running = llbot_status == ProcessStatus.RUNNING
             if llbot_pid:
-                cpu, mem, llbot_running = self._get_process_resources(llbot_pid)
-                if llbot_running:
+                cpu, mem, is_alive = self._get_process_resources(llbot_pid)
+                if is_alive:
                     total_cpu += cpu
                     total_mem += mem
-                    logger.debug(f"LLBot - PID: {llbot_pid}, CPU: {cpu:.1f}%, 内存: {mem:.1f}MB")
             
             # Bot运行状态：PMHQ和LLBot都启动才算运行中
             bot_running = pmhq_running and llbot_running
-            logger.debug(f"Bot总占用 - CPU: {total_cpu:.1f}%, 内存: {total_mem:.1f}MB, 运行中: {bot_running}")
             
             # 更新Bot占用卡片
             self.bot_card.update_resources(total_cpu, total_mem, bot_running)
             
-            # 获取QQ进程资源占用（通过PMHQ的getProcessInfo接口）
+            # 获取QQ进程资源占用
             qq_cpu = 0.0
             qq_mem = 0.0
             qq_running = False
             qq_version = ""
             
-            # 尝试从PMHQ获取QQ进程信息
             qq_pid = self.process_manager.fetch_qq_process_info()
             if qq_pid:
                 qq_running = True
@@ -2150,19 +2146,19 @@ class HomePage:
                 qq_cpu = qq_resources.get("cpu", 0.0)
                 qq_mem = qq_resources.get("memory", 0.0)
                 
-                # 获取QQ版本号
-                pmhq_port = self.process_manager.get_pmhq_port()
-                if pmhq_port:
-                    from utils.pmhq_client import PMHQClient
-                    client = PMHQClient(pmhq_port, timeout=2)
-                    device_info = client.get_device_info(timeout=2)
-                    if device_info:
-                        qq_version = device_info.build_ver
+                if not hasattr(self, '_cached_qq_version') or not self._cached_qq_version:
+                    pmhq_port = self.process_manager.get_pmhq_port()
+                    if pmhq_port:
+                        from utils.pmhq_client import PMHQClient
+                        client = PMHQClient(pmhq_port, timeout=2)
+                        device_info = client.get_device_info(timeout=2)
+                        if device_info:
+                            self._cached_qq_version = device_info.build_ver
+                qq_version = getattr(self, '_cached_qq_version', "") or ""
             
             self.qq_card.update_resources(qq_cpu, qq_mem, qq_running, version=qq_version)
                     
         except Exception as e:
-            # 如果获取资源信息失败，使用默认值
             pass
     
     def refresh_logs(self, log_entries: List[dict]):
