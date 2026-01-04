@@ -67,6 +67,14 @@ class MainWindow:
         
         self.page: Optional[ft.Page] = None
         self.current_page_index = 0
+        self._update_lock = threading.Lock()
+        self._navigating = False
+        self._ui_updates_enabled = True
+        
+        # 全局 UI 更新节流
+        self._last_page_update_time = 0.0
+        self._page_update_lock = threading.Lock()
+        self._page_update_min_interval = 0.05  # 最小更新间隔 50ms
         
         self.resource_monitor_thread: Optional[threading.Thread] = None
         self.monitoring_resources = False
@@ -148,49 +156,24 @@ class MainWindow:
         # 注册更新发现回调，同时通知首页和关于页面
         self.update_manager.set_updates_found_callback(self._on_updates_found)
         
-        # 创建导航栏
-        self.nav_rail = ft.NavigationRail(
-            selected_index=0,
-            label_type=ft.NavigationRailLabelType.ALL,
-            min_width=80,
-            min_extended_width=160,
-            group_alignment=-0.9,
-            bgcolor=ft.Colors.TRANSPARENT,
-            leading=None,
-            trailing=None,
-            destinations=[
-                ft.NavigationRailDestination(
-                    icon=ft.Icons.DASHBOARD_OUTLINED,
-                    selected_icon=ft.Icons.DASHBOARD,
-                    label="控制面板",
-                    padding=ft.padding.symmetric(vertical=8)
-                ),
-                ft.NavigationRailDestination(
-                    icon=ft.Icons.ARTICLE_OUTLINED,
-                    selected_icon=ft.Icons.ARTICLE,
-                    label="日志查看",
-                    padding=ft.padding.symmetric(vertical=8)
-                ),
-                ft.NavigationRailDestination(
-                    icon=ft.Icons.SETTINGS_OUTLINED,
-                    selected_icon=ft.Icons.SETTINGS,
-                    label="系统配置",
-                    padding=ft.padding.symmetric(vertical=8)
-                ),
-                ft.NavigationRailDestination(
-                    icon=ft.Icons.TUNE_OUTLINED,
-                    selected_icon=ft.Icons.TUNE,
-                    label="Bot配置",
-                    padding=ft.padding.symmetric(vertical=8)
-                ),
-                ft.NavigationRailDestination(
-                    icon=ft.Icons.INFO_OUTLINED,
-                    selected_icon=ft.Icons.INFO,
-                    label="关于应用",
-                    padding=ft.padding.symmetric(vertical=8)
-                ),
-            ],
-            on_change=self._on_nav_change,
+        # 自定义导航项数据
+        self._nav_items = [
+            {"icon": ft.Icons.DASHBOARD_OUTLINED, "selected_icon": ft.Icons.DASHBOARD, "label": "控制面板"},
+            {"icon": ft.Icons.ARTICLE_OUTLINED, "selected_icon": ft.Icons.ARTICLE, "label": "日志查看"},
+            {"icon": ft.Icons.SETTINGS_OUTLINED, "selected_icon": ft.Icons.SETTINGS, "label": "系统配置"},
+            {"icon": ft.Icons.TUNE_OUTLINED, "selected_icon": ft.Icons.TUNE, "label": "Bot配置"},
+            {"icon": ft.Icons.INFO_OUTLINED, "selected_icon": ft.Icons.INFO, "label": "关于应用"},
+        ]
+        self._nav_buttons = []
+        
+        for i, item in enumerate(self._nav_items):
+            btn = self._create_nav_button(i, item)
+            self._nav_buttons.append(btn)
+        
+        self.nav_column = ft.Column(
+            controls=self._nav_buttons,
+            spacing=4,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
         )
         
         # 创建主题切换按钮
@@ -204,10 +187,19 @@ class MainWindow:
             )
         )
         
-        # 创建内容区域（移除动画避免卡顿）
-        self.content_area = ft.Container(
-            content=self.home_page.control,
+        # 使用 Stack + visible 切换页面，避免重建组件树导致 Flutter 崩溃
+        self._page_containers = [
+            ft.Container(content=self.home_page.control, expand=True, visible=True),
+            ft.Container(content=self.log_page.control, expand=True, visible=False),
+            ft.Container(content=self.config_page.control, expand=True, visible=False),
+            ft.Container(content=self.llbot_config_page.control, expand=True, visible=False),
+            ft.Container(content=self.about_page.control, expand=True, visible=False),
+        ]
+        
+        self.content_area = ft.Stack(
+            controls=self._page_containers,
             expand=True,
+            clip_behavior=ft.ClipBehavior.NONE,
         )
         
         # 创建头像/图标容器
@@ -248,8 +240,9 @@ class MainWindow:
                 content=ft.Column([
                     self.avatar_container,
                     ft.Container(
-                        content=self.nav_rail,
+                        content=self.nav_column,
                         expand=True,
+                        padding=ft.padding.symmetric(horizontal=8),
                     ),
                     ft.Divider(height=1),
                     ft.Container(
@@ -259,6 +252,7 @@ class MainWindow:
                     ),
                 ], spacing=0, expand=True, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
                 bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.PRIMARY),
+                width=90,
             ),
             # 右侧内容区域
             ft.VerticalDivider(width=2, thickness=2),
@@ -267,78 +261,133 @@ class MainWindow:
         
         page.add(main_layout)
         
-        # 设置系统托盘（延迟一点启动，确保窗口已完全初始化）
-        def delayed_tray_setup():
-            import time
-            time.sleep(2)  # 等待2秒，确保窗口完全加载
-            print("延迟托盘初始化开始...")
-            self._setup_system_tray()
-        
-        tray_setup_thread = threading.Thread(target=delayed_tray_setup, daemon=True)
-        tray_setup_thread.start()
-        
-        # 启动异步资源监控（替代旧的线程监控）
-        self._start_async_monitoring()
-        
-        # 刷新首页进程资源
-        self.home_page.refresh_process_resources()
-        
-        # 检查是否需要自动启动bot
-        self._check_auto_start_bot()
-        
-        # 检查是否需要启动后自动缩进托盘
-        self._check_minimize_to_tray_on_start()
+        # 首次初始化时才执行以下逻辑，重连时跳过
+        if not getattr(self, '_build_completed', False):
+            self._build_completed = True
+            
+            def delayed_tray_setup():
+                import time
+                time.sleep(2)
+                print("延迟托盘初始化开始...")
+                self._setup_system_tray()
+            
+            tray_setup_thread = threading.Thread(target=delayed_tray_setup, daemon=True)
+            tray_setup_thread.start()
+            
+            self._start_async_monitoring()
+            self.home_page.refresh_process_resources()
+            self._check_auto_start_bot()
+            self._check_minimize_to_tray_on_start()
+        else:
+            # 重连时只刷新状态
+            self.home_page.refresh_process_resources()
     
-    def _on_nav_change(self, e):
-        # 启动过程中禁止切换页面
-        if self.home_page.is_starting or self.home_page.is_downloading or self.home_page.is_downloading_llbot or self.home_page.is_downloading_node or self.home_page.is_downloading_ffmpeg or self.home_page.is_downloading_ffprobe:
-            e.control.selected_index = self.current_page_index
-            if self.page:
-                self.page.update()
+    def safe_page_update(self):
+        """线程安全的页面更新，带节流"""
+        if not self.page or self._navigating:
             return
-        self._navigate_to(e.control.selected_index)
+        
+        with self._page_update_lock:
+            now = time.time()
+            if now - self._last_page_update_time < self._page_update_min_interval:
+                return
+            self._last_page_update_time = now
+        
+        try:
+            self.page.update()
+        except Exception:
+            pass
     
     def _navigate_to(self, index: int):
-        if self.current_page_index == 1 and index != 1:
-            self.log_page.on_page_leave()
+        if index == self.current_page_index or self._navigating:
+            return
         
+        self._navigating = True
+        old_index = self.current_page_index
         self.current_page_index = index
-        self.nav_rail.selected_index = index
-        
-        # 直接切换内容区域（无动画）
-        if index == 0:
-            self.content_area.content = self.home_page.control
-        elif index == 1:
-            self.content_area.content = self.log_page.control
-            self.log_page.on_page_enter()
-        elif index == 2:
-            self.content_area.content = self.config_page.control
-            self.config_page.refresh()
-        elif index == 3:
-            self.content_area.content = self.llbot_config_page.control
-            self.llbot_config_page.refresh()
-        elif index == 4:
-            self.content_area.content = self.about_page.control
-            self.about_page.refresh()
         
         try:
-            if self.page:
-                self.page.update()
-        except AssertionError:
-            pass
-        
-        # 首页资源刷新放在后台线程执行，避免阻塞UI
-        if index == 0:
-            import threading
-            threading.Thread(target=self._refresh_home_async, daemon=True).start()
-    
-    def _refresh_home_async(self):
-        self.home_page.refresh_process_resources()
-        try:
+            self._page_containers[old_index].visible = False
+            self._page_containers[index].visible = True
+            self._update_nav_buttons(old_index, index)
+            
             if self.page:
                 self.page.update()
         except Exception:
             pass
+        finally:
+            self._navigating = False
+        
+        # 异步执行页面离开和进入逻辑
+        def async_page_transition():
+            try:
+                if old_index == 1:
+                    self.log_page.on_page_leave()
+                
+                if index == 1:
+                    self.log_page.on_page_enter()
+                elif index == 2:
+                    self.config_page.refresh()
+                elif index == 3:
+                    self.llbot_config_page.refresh()
+                elif index == 4:
+                    self.about_page.refresh()
+            except Exception:
+                pass
+        threading.Thread(target=async_page_transition, daemon=True).start()
+    
+    def _create_nav_button(self, index: int, item: dict) -> ft.Container:
+        is_selected = index == self.current_page_index
+        return ft.Container(
+            content=ft.Column([
+                ft.Icon(
+                    item["selected_icon"] if is_selected else item["icon"],
+                    size=24,
+                    color=ft.Colors.PRIMARY if is_selected else ft.Colors.ON_SURFACE_VARIANT,
+                ),
+                ft.Text(
+                    item["label"],
+                    size=11,
+                    text_align=ft.TextAlign.CENTER,
+                    color=ft.Colors.PRIMARY if is_selected else ft.Colors.ON_SURFACE_VARIANT,
+                    weight=ft.FontWeight.W_600 if is_selected else ft.FontWeight.NORMAL,
+                ),
+            ], spacing=4, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+            padding=ft.padding.symmetric(vertical=12, horizontal=8),
+            border_radius=12,
+            bgcolor=ft.Colors.with_opacity(0.15, ft.Colors.PRIMARY) if is_selected else None,
+            on_click=lambda e, idx=index: self._on_nav_click(idx),
+            width=74,
+        )
+    
+    def _update_nav_buttons(self, old_index: int, new_index: int):
+        if old_index == new_index:
+            return
+        if 0 <= old_index < len(self._nav_buttons):
+            item = self._nav_items[old_index]
+            self._nav_buttons[old_index].bgcolor = None
+            col = self._nav_buttons[old_index].content
+            col.controls[0].name = item["icon"]
+            col.controls[0].color = ft.Colors.ON_SURFACE_VARIANT
+            col.controls[1].color = ft.Colors.ON_SURFACE_VARIANT
+            col.controls[1].weight = ft.FontWeight.NORMAL
+        if 0 <= new_index < len(self._nav_buttons):
+            item = self._nav_items[new_index]
+            self._nav_buttons[new_index].bgcolor = ft.Colors.with_opacity(0.15, ft.Colors.PRIMARY)
+            col = self._nav_buttons[new_index].content
+            col.controls[0].name = item["selected_icon"]
+            col.controls[0].color = ft.Colors.PRIMARY
+            col.controls[1].color = ft.Colors.PRIMARY
+            col.controls[1].weight = ft.FontWeight.W_600
+    
+    def _on_nav_click(self, index: int):
+        if self._navigating:
+            return
+        
+        if self.home_page.is_starting or self.home_page.is_downloading or self.home_page.is_downloading_llbot or self.home_page.is_downloading_node or self.home_page.is_downloading_ffmpeg or self.home_page.is_downloading_ffprobe:
+            return
+        
+        self._navigate_to(index)
     
     def _on_theme_toggle(self, e):
         if self.page:
@@ -779,13 +828,10 @@ class MainWindow:
         self._do_close()
     
     def _start_async_monitoring(self):
-        """启动异步资源监控"""
         if not self.async_app or not self.page:
-            # 回退到旧的线程监控
             self._start_resource_monitoring()
             return
         
-        # 设置异步资源监控器的 PMHQ 端口
         pmhq_port = self.process_manager.get_pmhq_port()
         if pmhq_port:
             self.async_resource_monitor.set_pmhq_port(pmhq_port)
@@ -793,8 +839,11 @@ class MainWindow:
         self.async_resource_monitor.set_uin_callback(self._on_uin_received)
         
         async def on_logs_updated(new_logs: List[LogEntry]):
-            if self.current_page_index == 0 and self.page:
-                logs = self.async_log_collector.get_recent_logs(10)
+            if self._navigating or self.current_page_index != 0:
+                return
+            try:
+                # 从收集器获取最近10条日志
+                recent_logs = self.async_log_collector.get_recent_logs(10)
                 log_entries = [
                     {
                         "timestamp": log.timestamp.strftime("%H:%M:%S"),
@@ -802,21 +851,20 @@ class MainWindow:
                         "level": log.level,
                         "message": log.message,
                     }
-                    for log in logs
+                    for log in recent_logs
                 ]
                 self.home_page.refresh_logs(log_entries)
-                try:
-                    self.page.update()
-                except Exception:
-                    pass
+            except Exception:
+                pass
         
         async def on_resources_updated(data: Dict[str, Any]):
-            if self.current_page_index == 0 and self.page:
+            # 只在首页时更新资源
+            if self._navigating or self.current_page_index != 0:
+                return
+            try:
                 self.home_page.refresh_process_resources()
-                try:
-                    self.page.update()
-                except Exception:
-                    pass
+            except Exception:
+                pass
         
         self.async_app.set_logs_callback(on_logs_updated)
         self.async_app.set_resources_callback(on_resources_updated)

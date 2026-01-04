@@ -2,6 +2,7 @@
 
 import flet as ft
 import threading
+import time
 from typing import Optional, List, Tuple
 from core.async_log_collector import AsyncLogCollector, LogEntry
 from utils.constants import MAX_LOG_LINES
@@ -11,7 +12,7 @@ class LogPage:
     """日志页面组件 - 使用固定控件池避免内存泄漏"""
 
     MAX_DISPLAY = 100
-    AUTO_REFRESH_INTERVAL = 0.5
+    AUTO_REFRESH_INTERVAL = 0.2
 
     def __init__(self, log_collector: AsyncLogCollector):
         self.log_collector = log_collector
@@ -344,12 +345,13 @@ class LogPage:
         while not self._stop_event.is_set():
             if self._stop_event.wait(timeout=self.AUTO_REFRESH_INTERVAL):
                 break
-            # 有选中行时暂停自动刷新
-            if self._is_page_visible and self._auto_refresh_enabled and not self._selected_rows:
-                try:
-                    self._load_logs()
-                except Exception:
-                    pass
+            # 页面不可见或有选中行时暂停
+            if not self._is_page_visible or not self._auto_refresh_enabled or self._selected_rows:
+                continue
+            try:
+                self._load_logs()
+            except Exception:
+                pass
 
     def _start_auto_refresh(self):
         """启动自动刷新线程"""
@@ -362,29 +364,22 @@ class LogPage:
 
     def cleanup(self):
         """清理资源"""
+        self._is_page_visible = False
         self._stop_event.set()
         if self._auto_refresh_thread and self._auto_refresh_thread.is_alive():
-            self._auto_refresh_thread.join(timeout=1.0)
+            self._auto_refresh_thread.join(timeout=0.5)
 
     def refresh(self):
         """刷新页面"""
         self._load_logs(force=True)
 
     def on_page_enter(self):
-        """进入页面"""
         self._is_page_visible = True
         self._last_log_hash = None
         self._start_auto_refresh()
-        # 延迟加载日志，让页面先渲染完
-        def delayed_load():
-            import time
-            time.sleep(0.1)
-            self._load_logs(force=True)
-        threading.Thread(target=delayed_load, daemon=True).start()
+        self._load_logs(force=True)
 
     def on_page_leave(self):
-        """离开页面"""
         self._is_page_visible = False
         self._last_log_hash = None
-        # 清除选中状态
         self._selected_rows.clear()

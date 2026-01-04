@@ -587,9 +587,14 @@ class LLBotConfigPage:
     
     def refresh(self):
         has_uin = bool(self.get_uin_func())
-        self.current_config = self._load_config()
-        self._update_ui()
-        self._rebuild_tabs()
+        new_config = self._load_config()
+        
+        # 只有配置变化时才重建UI
+        if new_config != self.current_config:
+            self.current_config = new_config
+            self._update_ui()
+            self._rebuild_tabs()
+        
         self.no_uin_container.visible = not has_uin
         self.config_content.visible = has_uin
         self.floating_buttons.visible = has_uin

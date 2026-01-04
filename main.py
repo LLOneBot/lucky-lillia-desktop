@@ -31,6 +31,11 @@ from ui.main_window import MainWindow
 from __version__ import __version__
 
 
+# 全局状态：防止 Flet View 重连时重复初始化
+_app_initialized = False
+_main_window = None
+
+
 
 # 获取应用程序所在目录
 def get_app_dir() -> Path:
@@ -583,36 +588,41 @@ def check_and_show_migration_dialog(page: ft.Page, on_complete: callable):
 
 
 def main(page: ft.Page):
-    """应用主入口函数
+    global _app_initialized, _main_window
     
-    Args:
-        page: Flet页面对象
-    """
     logger.info(f"启动 {APP_NAME} v{__version__}")
     
+    # 检测是否是 Flet View 重连
+    if _app_initialized and _main_window:
+        logger.warning("检测到 Flet View 重连，重新绑定页面")
+        try:
+            _main_window.page = page
+            _main_window.build(page)
+            logger.info("页面重新绑定成功")
+            return
+        except Exception as e:
+            logger.error(f"页面重新绑定失败: {e}")
+            # 继续正常初始化流程
+    
     try:
-        # 设置页面基本属性
         page.title = f"{APP_NAME} v{__version__}"
         page.window.width = DEFAULT_WINDOW_WIDTH
         page.window.height = DEFAULT_WINDOW_HEIGHT
         page.window.min_width = 800
         page.window.min_height = 600
         
-        # 设置窗口图标
         icon_path = get_icon_path()
         if icon_path:
             page.window.icon = icon_path
             logger.info(f"已设置窗口图标: {icon_path}")
         
         def continue_startup():
-            """继续启动流程（迁移检查完成后调用）"""
+            global _app_initialized, _main_window
             try:
-                # 初始化所有管理器
                 managers = initialize_managers()
                 
-                # 创建主窗口
                 logger.info("创建主窗口...")
-                main_window = MainWindow(
+                _main_window = MainWindow(
                     process_manager=managers['process_manager'],
                     log_collector=managers['log_collector'],
                     config_manager=managers['config_manager'],
@@ -623,19 +633,18 @@ def main(page: ft.Page):
                     async_resource_monitor=managers['async_resource_monitor']
                 )
                 
-                # 构建UI
                 logger.info("构建用户界面...")
-                main_window.build(page)
+                _main_window.build(page)
                 
+                _app_initialized = True
                 logger.info("应用启动成功")
             except Exception as e:
                 show_startup_error(page, e)
         
-        # 检查配置迁移
         logger.info("检查配置迁移...")
         check_and_show_migration_dialog(page, continue_startup)
         
-        return  # 让迁移对话框处理后续流程
+        return
         
     except Exception as e:
         show_startup_error(page, e)

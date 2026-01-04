@@ -55,7 +55,6 @@ class AsyncApp:
         self._tasks.clear()
     
     async def _log_consumer_loop(self):
-        """日志消费循环 - 从队列获取日志并触发回调"""
         while self._running:
             try:
                 new_logs = await self.log_collector.process_pending_logs()

@@ -196,12 +196,13 @@ class SSEListener:
                     logger.info(f"SSE 连接已建立, status={response.status}")
                     
                     buffer = ""
+                    decoder = __import__('codecs').getincrementaldecoder('utf-8')('replace')
                     while self._running:
                         chunk = response.read(4096)
                         if not chunk:
                             break
                         
-                        buffer += chunk.decode('utf-8')
+                        buffer += decoder.decode(chunk)
                         
                         while "\n\n" in buffer:
                             message, buffer = buffer.split("\n\n", 1)
