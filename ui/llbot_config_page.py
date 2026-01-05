@@ -57,6 +57,7 @@ class LLBotConfigPage:
         self.control = None
         self.current_config: Dict[str, Any] = {}
         self.connect_controls: List[Dict] = []
+        self._page = None
         
     def _get_config_path(self) -> Optional[str]:
         uin = self.get_uin_func()
@@ -557,31 +558,34 @@ class LLBotConfigPage:
         self.ffmpeg_path.value = cfg.get("ffmpeg", "")
 
     def _show_error(self, msg: str):
-        if self.control and self.control.page:
+        page = self._page or (self.control.page if self.control else None)
+        if page:
             snack = ft.SnackBar(
                 content=ft.Text(msg, color=ft.Colors.WHITE),
                 bgcolor=ft.Colors.RED_600,
                 duration=2000,
             )
-            self.control.page.overlay.append(snack)
+            page.overlay.append(snack)
             snack.open = True
-            self.control.page.update()
+            page.update()
     
     def _show_success(self, msg: str):
-        if self.control and self.control.page:
+        page = self._page or (self.control.page if self.control else None)
+        if page:
             snack = ft.SnackBar(
                 content=ft.Text(msg, color=ft.Colors.WHITE),
                 bgcolor=ft.Colors.GREEN_600,
                 duration=2000,
             )
-            self.control.page.overlay.append(snack)
+            page.overlay.append(snack)
             snack.open = True
-            self.control.page.update()
+            page.update()
     
     def _try_update(self):
         try:
-            if self.control and self.control.page:
-                self.control.page.update()
+            page = self._page or (self.control.page if self.control else None)
+            if page:
+                page.update()
         except Exception:
             pass
     

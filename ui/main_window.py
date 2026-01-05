@@ -144,6 +144,7 @@ class MainWindow:
             get_uin_func=self.process_manager.get_uin
         )
         self.llbot_config_page.build()
+        self.llbot_config_page._page = page
         
         self.about_page = AboutPage(
             self.version_detector,
@@ -405,6 +406,7 @@ class MainWindow:
     def _on_uin_received(self, uin: str, nickname: str):
         if uin:
             self._update_avatar(uin)
+            self.llbot_config_page.refresh()
         if uin and nickname:
             self._update_home_title(uin, nickname)
             self._update_window_title(uin, nickname)
