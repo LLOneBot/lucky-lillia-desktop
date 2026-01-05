@@ -27,6 +27,8 @@ class LogPage:
         self._log_rows: List[Tuple[ft.Container, ft.Text]] = []
         # 选中的行索引集合
         self._selected_rows: set = set()
+        # 主窗口引用，用于检查导航状态
+        self._main_window = None
 
     def build(self):
         """构建UI组件"""
@@ -280,12 +282,20 @@ class LogPage:
             pass
 
     def _load_logs(self, force: bool = False):
-        """加载日志"""
+        """加载日志 - 带导航状态检查避免竞态条件"""
+        # 检查是否正在导航，避免在页面切换过程中更新UI
+        if self._main_window and getattr(self._main_window, '_navigating', False):
+            return
+
         need_update = False
         need_scroll = False
-        
+
         with self._update_lock:
             if not self._is_page_visible:
+                return
+
+            # 再次检查导航状态（双重检查锁定模式）
+            if self._main_window and getattr(self._main_window, '_navigating', False):
                 return
 
             log_count = self.log_collector.get_log_count()
@@ -297,9 +307,7 @@ class LogPage:
                     for container, row, text in self._log_rows:
                         container.visible = False
                     need_update = True
-                # 不return，让后面的update在锁外执行
             else:
-                # 获取最新日志
                 logs = self.log_collector.get_recent_logs(self.MAX_DISPLAY)
                 if logs:
                     last_log = logs[-1]
@@ -320,23 +328,40 @@ class LogPage:
                             else:
                                 if container.visible:
                                     container.visible = False
-                        
+
                         need_update = True
                         need_scroll = self._auto_refresh_enabled
-        
+
         if need_update:
             try:
-                page = self.control.page if self.control else None
-                if page and self._is_page_visible:
-                    async def safe_update():
-                        try:
-                            if self.control and self.control.page and self._is_page_visible:
-                                self.log_list.update()
-                                if need_scroll:
-                                    await self.log_list.scroll_to(offset=-1, duration=0)
-                        except Exception:
-                            pass
-                    page.run_task(safe_update)
+                # 检查导航状态
+                if self._main_window and getattr(self._main_window, '_navigating', False):
+                    return
+                if not self._is_page_visible:
+                    return
+                if not self.control:
+                    return
+                page = self.control.page
+                if not page:
+                    return
+
+                async def safe_update():
+                    try:
+                        # 更新前再次检查状态
+                        if self._main_window and getattr(self._main_window, '_navigating', False):
+                            return
+                        if not self._is_page_visible:
+                            return
+                        if not self.control or not self.control.page:
+                            return
+                        if not self.log_list.page:
+                            return
+                        self.log_list.update()
+                        if need_scroll:
+                            await self.log_list.scroll_to(offset=-1, duration=0)
+                    except Exception:
+                        pass
+                page.run_task(safe_update)
             except Exception:
                 pass
 
@@ -380,6 +405,12 @@ class LogPage:
         self._load_logs(force=True)
 
     def on_page_leave(self):
+        """页面离开时的清理 - 确保线程完全停止"""
         self._is_page_visible = False
+        self._stop_event.set()
         self._last_log_hash = None
         self._selected_rows.clear()
+
+        # 等待自动刷新线程完全停止，避免竞态条件
+        if self._auto_refresh_thread and self._auto_refresh_thread.is_alive():
+            self._auto_refresh_thread.join(timeout=0.5)

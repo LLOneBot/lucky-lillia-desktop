@@ -1,5 +1,6 @@
 ﻿"""首页/控制面板"""
 from pathlib import Path
+import asyncio
 
 import flet as ft
 from typing import Optional, Callable, List
@@ -115,46 +116,59 @@ class ProcessResourceCard:
         return self.control
     
     def update_resources(self, cpu_percent: float, memory_mb: float, is_running: bool, 
-                        file_exists: bool = True, version: str = ""):
+                        file_exists: bool = True, version: str = "", system_cpu: float = 0.0):
+        if not self.control:
+            return
+        
+        try:
+            if not self.control.page:
+                return
+            if not self.status_icon.page or not self.cpu_text.page:
+                return
+        except Exception:
+            return
+        
         self.cpu_percent = cpu_percent
         self.memory_mb = memory_mb
         self.is_running = is_running
         self.file_exists = file_exists
         
-        if self.show_download_status and not file_exists:
-            self.status_icon.name = ft.Icons.DOWNLOAD
-            self.status_icon.color = ft.Colors.ORANGE_600
-            self.status_text.value = "未下载"
-            self.status_text.color = ft.Colors.ORANGE_700
-        elif is_running:
-            self.status_icon.name = ft.Icons.CHECK_CIRCLE
-            self.status_icon.color = ft.Colors.GREEN_600
-            self.status_text.value = "运行中"
-            self.status_text.color = ft.Colors.GREEN_700
-        else:
-            self.status_icon.name = ft.Icons.CIRCLE
-            self.status_icon.color = ft.Colors.GREY_400
-            self.status_text.value = "未启动"
-            self.status_text.color = ft.Colors.GREY_600
-        
-        cpu_count = psutil.cpu_count() or 1
-        normalized_cpu = cpu_percent / cpu_count
-        self.cpu_text.value = f"CPU: {normalized_cpu:.1f}%"
-        system_cpu = psutil.cpu_percent(interval=0)
-        available_cpu = 100.0 - system_cpu
-        cpu_ratio = normalized_cpu / available_cpu if available_cpu > 0 else 0
-        self.cpu_progress.value = min(cpu_ratio, 1.0)
-        
-        self.memory_text.value = f"内存: {memory_mb:.0f} MB"
-        available_memory_mb = psutil.virtual_memory().available / 1024 / 1024
-        memory_ratio = memory_mb / available_memory_mb if available_memory_mb > 0 else 0
-        self.memory_progress.value = min(memory_ratio, 1.0)
-        
-        if version and self._version_text:
-            self._version_text.value = version
-            self._version_text.visible = True
-        elif self._version_text:
-            self._version_text.visible = False
+        try:
+            if self.show_download_status and not file_exists:
+                self.status_icon.name = ft.Icons.DOWNLOAD
+                self.status_icon.color = ft.Colors.ORANGE_600
+                self.status_text.value = "未下载"
+                self.status_text.color = ft.Colors.ORANGE_700
+            elif is_running:
+                self.status_icon.name = ft.Icons.CHECK_CIRCLE
+                self.status_icon.color = ft.Colors.GREEN_600
+                self.status_text.value = "运行中"
+                self.status_text.color = ft.Colors.GREEN_700
+            else:
+                self.status_icon.name = ft.Icons.CIRCLE
+                self.status_icon.color = ft.Colors.GREY_400
+                self.status_text.value = "未启动"
+                self.status_text.color = ft.Colors.GREY_600
+            
+            cpu_count = psutil.cpu_count() or 1
+            normalized_cpu = cpu_percent / cpu_count
+            self.cpu_text.value = f"CPU: {normalized_cpu:.1f}%"
+            available_cpu = 100.0 - system_cpu
+            cpu_ratio = normalized_cpu / available_cpu if available_cpu > 0 else 0
+            self.cpu_progress.value = min(cpu_ratio, 1.0)
+            
+            self.memory_text.value = f"内存: {memory_mb:.0f} MB"
+            available_memory_mb = psutil.virtual_memory().available / 1024 / 1024
+            memory_ratio = memory_mb / available_memory_mb if available_memory_mb > 0 else 0
+            self.memory_progress.value = min(memory_ratio, 1.0)
+            
+            if version and self._version_text:
+                self._version_text.value = version
+                self._version_text.visible = True
+            elif self._version_text:
+                self._version_text.visible = False
+        except Exception:
+            pass
 
 
 class ResourceMonitorCard:
@@ -236,12 +250,15 @@ class ResourceMonitorCard:
         return self.control
     
     def update_resources(self, cpu_percent: float, memory_percent: float):
-        """更新资源使用情况
+        if not self.control:
+            return
         
-        Args:
-            cpu_percent: CPU使用率百分比
-            memory_percent: 内存使用率百分比
-        """
+        try:
+            if not self.control.page:
+                return
+        except Exception:
+            return
+        
         self.cpu_percent = cpu_percent
         self.memory_percent = memory_percent
         
@@ -343,67 +360,70 @@ class LogPreviewCard:
             self.on_view_all_callback()
     
     def update_logs(self, log_entries: List[dict]):
-        """更新日志显示
+        if not self.control:
+            return
         
-        Args:
-            log_entries: 日志条目列表，每个条目包含timestamp, process_name, level, message
-        """
-        entries = log_entries[-10:]  # 只显示最新10条
+        try:
+            if not self.control.page:
+                return
+            # 检查子控件是否还在页面上
+            if not self._empty_container.page:
+                return
+        except Exception:
+            return
+        
+        entries = log_entries[-10:]
         
         # 计算日志哈希，只在内容变化时才更新UI
         if entries:
-            # 使用最后一条日志的时间戳和消息作为哈希
             last_entry = entries[-1]
             current_hash = (
                 len(entries),
                 last_entry.get("timestamp", ""),
-                last_entry.get("message", "")[:50]  # 只取前50字符
+                last_entry.get("message", "")[:50]
             )
         else:
             current_hash = (0, "", "")
         
-        # 如果内容没变化，跳过更新
         if current_hash == self._last_log_hash:
             return
         
         self._last_log_hash = current_hash
         self.log_entries = entries
         
-        if not self.log_entries:
-            # 显示空状态，隐藏所有日志行
-            self._empty_container.visible = True
-            for row, _, _ in self._log_rows:
-                row.visible = False
-        else:
-            # 隐藏空状态
-            self._empty_container.visible = False
-            
-            for i, (row, icon_ctrl, text_ctrl) in enumerate(self._log_rows):
-                if i < len(self.log_entries):
-                    entry = self.log_entries[i]
-                    timestamp = entry.get("timestamp", "")
-                    process_name = entry.get("process_name", "")
-                    level = entry.get("level", "stdout")
-                    message = entry.get("message", "")
-                    
-                    if level == "stderr":
-                        text_ctrl.color = ft.Colors.RED_700
-                        icon_ctrl.name = ft.Icons.ERROR_OUTLINE
-                        icon_ctrl.color = ft.Colors.RED_600
-                    else:
-                        text_ctrl.color = ft.Colors.ON_SURFACE
-                        icon_ctrl.name = ft.Icons.INFO_OUTLINE
-                        icon_ctrl.color = ft.Colors.BLUE_600
-                    if process_name == "LLBot":
-                        text_ctrl.value = message
-                    else:
-                        text_ctrl.value = f"[{timestamp}] [{process_name}] {message}"
-                    row.visible = True
-                else:
+        try:
+            if not self.log_entries:
+                self._empty_container.visible = True
+                for row, _, _ in self._log_rows:
                     row.visible = False
-            
-            # scroll_to 在 Flet 0.80 中是异步方法，跳过自动滚动避免频繁调用
-            # 用户可以手动滚动查看最新日志
+            else:
+                self._empty_container.visible = False
+                
+                for i, (row, icon_ctrl, text_ctrl) in enumerate(self._log_rows):
+                    if i < len(self.log_entries):
+                        entry = self.log_entries[i]
+                        timestamp = entry.get("timestamp", "")
+                        process_name = entry.get("process_name", "")
+                        level = entry.get("level", "stdout")
+                        message = entry.get("message", "")
+                        
+                        if level == "stderr":
+                            text_ctrl.color = ft.Colors.RED_700
+                            icon_ctrl.name = ft.Icons.ERROR_OUTLINE
+                            icon_ctrl.color = ft.Colors.RED_600
+                        else:
+                            text_ctrl.color = ft.Colors.ON_SURFACE
+                            icon_ctrl.name = ft.Icons.INFO_OUTLINE
+                            icon_ctrl.color = ft.Colors.BLUE_600
+                        if process_name == "LLBot":
+                            text_ctrl.value = message
+                        else:
+                            text_ctrl.value = f"[{timestamp}] [{process_name}] {message}"
+                        row.visible = True
+                    else:
+                        row.visible = False
+        except Exception:
+            pass
 
 
 class HomePage:
@@ -2063,24 +2083,26 @@ class HomePage:
         Args:
             title: 新标题
         """
-        if self.title_text:
-            self.title_text.value = title
-            # 显示昵称时隐藏图标
-            if self.title_icon:
-                self.title_icon.visible = (title == "控制面板")
-            if self.page:
-                self.page.update()
+        if not self.title_text:
+            return
+        
+        # 检查控件是否还在页面上
+        try:
+            if not self.title_text.page:
+                return
+        except Exception:
+            return
+        
+        self.title_text.value = title
+        # 显示昵称时隐藏图标
+        if self.title_icon:
+            self.title_icon.visible = (title == "控制面板")
     
     def _on_view_all_logs(self):
         if self.on_navigate_logs:
             self.on_navigate_logs()
     
-    def _get_process_resources(self, pid: int) -> tuple:
-        """获取进程的 CPU 和内存使用情况
-        
-        Returns:
-            (cpu_percent, memory_mb, is_running) 或 (0.0, 0.0, False) 如果进程不存在
-        """
+    def _get_process_resources_sync(self, pid: int) -> tuple:
         try:
             proc = psutil.Process(pid)
             if not proc.is_running():
@@ -2091,82 +2113,154 @@ class HomePage:
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             return 0.0, 0.0, False
     
-    def refresh_process_resources(self):
-        import logging
-        logger = logging.getLogger(__name__)
+    def _collect_resources_sync(self):
+        """在线程中收集所有资源数据（阻塞操作）"""
+        total_cpu = 0.0
+        total_mem = 0.0
+        
+        manager_pid = os.getpid()
+        cpu, mem, _ = self._get_process_resources_sync(manager_pid)
+        total_cpu += cpu
+        total_mem += mem
+        
+        pids = self.process_manager.get_all_pids()
+        
+        pmhq_pid = pids.get("pmhq")
+        pmhq_status = self.process_manager.get_process_status("pmhq")
+        pmhq_running = pmhq_status == ProcessStatus.RUNNING
+        if pmhq_pid:
+            cpu, mem, is_alive = self._get_process_resources_sync(pmhq_pid)
+            if is_alive:
+                total_cpu += cpu
+                total_mem += mem
+        
+        llbot_pid = pids.get("llbot")
+        llbot_status = self.process_manager.get_process_status("llbot")
+        llbot_running = llbot_status == ProcessStatus.RUNNING
+        if llbot_pid:
+            cpu, mem, is_alive = self._get_process_resources_sync(llbot_pid)
+            if is_alive:
+                total_cpu += cpu
+                total_mem += mem
+        
+        bot_running = pmhq_running and llbot_running
+        
+        qq_cpu = 0.0
+        qq_mem = 0.0
+        qq_running = False
+        qq_version = ""
+        
+        qq_pid = self.process_manager.fetch_qq_process_info()
+        if qq_pid:
+            qq_running = True
+            qq_resources = self.process_manager.get_qq_resources()
+            qq_cpu = qq_resources.get("cpu", 0.0)
+            qq_mem = qq_resources.get("memory", 0.0)
+            
+            if not hasattr(self, '_cached_qq_version') or not self._cached_qq_version:
+                pmhq_port = self.process_manager.get_pmhq_port()
+                if pmhq_port:
+                    from utils.pmhq_client import PMHQClient
+                    client = PMHQClient(pmhq_port, timeout=2)
+                    device_info = client.get_device_info(timeout=2)
+                    if device_info:
+                        self._cached_qq_version = device_info.build_ver
+            qq_version = getattr(self, '_cached_qq_version', "") or ""
+        
+        system_cpu = psutil.cpu_percent(interval=0)
+        
+        return {
+            "bot": (total_cpu, total_mem, bot_running),
+            "qq": (qq_cpu, qq_mem, qq_running, qq_version),
+            "system_cpu": system_cpu,
+        }
+    
+    async def refresh_process_resources_async(self):
+        if not self.page or not hasattr(self, 'control') or not self.control:
+            return
+        
+        # 检查是否正在导航
+        main_window = getattr(self.page, 'main_window', None)
+        if main_window and main_window._navigating:
+            return
         
         try:
-            total_cpu = 0.0
-            total_mem = 0.0
+            if self.control.page != self.page:
+                return
+        except Exception:
+            return
+        
+        try:
+            data = await asyncio.to_thread(self._collect_resources_sync)
             
-            # 管理器自身
-            manager_pid = os.getpid()
-            cpu, mem, _ = self._get_process_resources(manager_pid)
-            total_cpu += cpu
-            total_mem += mem
+            # 再次检查
+            if not self.page or not self.control:
+                return
+            if main_window and main_window._navigating:
+                return
+            try:
+                if self.control.page != self.page:
+                    return
+            except Exception:
+                return
             
-            pids = self.process_manager.get_all_pids()
+            bot_data = data["bot"]
+            system_cpu = data.get("system_cpu", 0.0)
+            self.bot_card.update_resources(bot_data[0], bot_data[1], bot_data[2], system_cpu=system_cpu)
             
-            # PMHQ - 检查状态而不仅仅是 PID
-            pmhq_pid = pids.get("pmhq")
-            pmhq_status = self.process_manager.get_process_status("pmhq")
-            pmhq_running = pmhq_status == ProcessStatus.RUNNING
-            if pmhq_pid:
-                cpu, mem, is_alive = self._get_process_resources(pmhq_pid)
-                if is_alive:
-                    total_cpu += cpu
-                    total_mem += mem
-            
-            # LLBot
-            llbot_pid = pids.get("llbot")
-            llbot_status = self.process_manager.get_process_status("llbot")
-            llbot_running = llbot_status == ProcessStatus.RUNNING
-            if llbot_pid:
-                cpu, mem, is_alive = self._get_process_resources(llbot_pid)
-                if is_alive:
-                    total_cpu += cpu
-                    total_mem += mem
-            
-            # Bot运行状态：PMHQ和LLBot都启动才算运行中
-            bot_running = pmhq_running and llbot_running
-            
-            # 更新Bot占用卡片
-            self.bot_card.update_resources(total_cpu, total_mem, bot_running)
-            
-            # 获取QQ进程资源占用
-            qq_cpu = 0.0
-            qq_mem = 0.0
-            qq_running = False
-            qq_version = ""
-            
-            qq_pid = self.process_manager.fetch_qq_process_info()
-            if qq_pid:
-                qq_running = True
-                qq_resources = self.process_manager.get_qq_resources()
-                qq_cpu = qq_resources.get("cpu", 0.0)
-                qq_mem = qq_resources.get("memory", 0.0)
-                
-                if not hasattr(self, '_cached_qq_version') or not self._cached_qq_version:
-                    pmhq_port = self.process_manager.get_pmhq_port()
-                    if pmhq_port:
-                        from utils.pmhq_client import PMHQClient
-                        client = PMHQClient(pmhq_port, timeout=2)
-                        device_info = client.get_device_info(timeout=2)
-                        if device_info:
-                            self._cached_qq_version = device_info.build_ver
-                qq_version = getattr(self, '_cached_qq_version', "") or ""
-            
-            self.qq_card.update_resources(qq_cpu, qq_mem, qq_running, version=qq_version)
-                    
-        except Exception as e:
+            qq_data = data["qq"]
+            self.qq_card.update_resources(qq_data[0], qq_data[1], qq_data[2], version=qq_data[3], system_cpu=system_cpu)
+        except Exception:
             pass
     
-    def refresh_logs(self, log_entries: List[dict]):
-        """刷新日志预览
+    def refresh_process_resources(self):
+        if not self.page or not hasattr(self, 'control') or not self.control:
+            return
         
-        Args:
-            log_entries: 日志条目列表
-        """
+        try:
+            if self.control.page != self.page:
+                return
+        except Exception:
+            return
+        
+        try:
+            data = self._collect_resources_sync()
+            
+            bot_data = data["bot"]
+            system_cpu = data.get("system_cpu", 0.0)
+            self.bot_card.update_resources(bot_data[0], bot_data[1], bot_data[2], system_cpu=system_cpu)
+            
+            qq_data = data["qq"]
+            self.qq_card.update_resources(qq_data[0], qq_data[1], qq_data[2], version=qq_data[3], system_cpu=system_cpu)
+        except Exception:
+            pass
+    
+    async def refresh_logs_async(self, log_entries: List[dict]):
+        if not self.page or not hasattr(self, 'control') or not self.control:
+            return
+        
+        main_window = getattr(self.page, 'main_window', None)
+        if main_window and main_window._navigating:
+            return
+        
+        try:
+            if self.control.page != self.page:
+                return
+        except Exception:
+            return
+        
+        self.log_card.update_logs(log_entries)
+    
+    def refresh_logs(self, log_entries: List[dict]):
+        if not self.page or not hasattr(self, 'control') or not self.control:
+            return
+        
+        try:
+            if self.control.page != self.page:
+                return
+        except Exception:
+            return
+        
         self.log_card.update_logs(log_entries)
     
     def _refresh_log_preview(self):
@@ -2492,3 +2586,4 @@ class HomePage:
             如果有待更新返回True
         """
         return self.update_manager.has_pending_app_update() if self.update_manager else False
+

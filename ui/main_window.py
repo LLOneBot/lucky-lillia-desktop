@@ -30,6 +30,11 @@ from utils.downloader import Downloader
 import threading
 import time
 import asyncio
+import logging
+
+logger = logging.getLogger(__name__)
+import time
+import asyncio
 
 
 class MainWindow:
@@ -70,11 +75,12 @@ class MainWindow:
         self._update_lock = threading.Lock()
         self._navigating = False
         self._ui_updates_enabled = True
+        self._crash_count = 0
         
         # 全局 UI 更新节流
         self._last_page_update_time = 0.0
         self._page_update_lock = threading.Lock()
-        self._page_update_min_interval = 0.05  # 最小更新间隔 50ms
+        self._page_update_min_interval = 0.05
         
         self.resource_monitor_thread: Optional[threading.Thread] = None
         self.monitoring_resources = False
@@ -132,6 +138,7 @@ class MainWindow:
         
         self.log_page = LogPage(self.async_log_collector)
         self.log_page.build()
+        self.log_page._main_window = self  # 设置主窗口引用以检查导航状态
         
         self.config_page = ConfigPage(
             self.config_manager,
@@ -197,10 +204,10 @@ class MainWindow:
             ft.Container(content=self.about_page.control, expand=True, visible=False),
         ]
         
-        self.content_area = ft.Stack(
-            controls=self._page_containers,
+        # 使用简单的 Container，不使用动画避免崩溃
+        self.content_area = ft.Container(
+            content=self.home_page.control,
             expand=True,
-            clip_behavior=ft.ClipBehavior.NONE,
         )
         
         # 创建头像/图标容器
@@ -280,62 +287,137 @@ class MainWindow:
             self._check_auto_start_bot()
             self._check_minimize_to_tray_on_start()
         else:
-            # 重连时只刷新状态
+            logger.info("Session 重连，恢复状态")
+            self._restore_button_state_on_reconnect()
             self.home_page.refresh_process_resources()
+            
+            current_uin = self.process_manager.get_uin()
+            current_nickname = self.process_manager.get_nickname()
+            if current_uin:
+                logger.info(f"恢复 UIN 显示: {current_uin}, {current_nickname}")
+                self._update_avatar(current_uin)
+                if current_nickname:
+                    self._update_home_title(current_uin, current_nickname)
+                    self._update_window_title(current_uin, current_nickname)
     
     def safe_page_update(self):
         """线程安全的页面更新，带节流"""
         if not self.page or self._navigating:
+            logger.debug(f"safe_page_update 跳过: page={bool(self.page)}, navigating={self._navigating}")
             return
         
         with self._page_update_lock:
             now = time.time()
             if now - self._last_page_update_time < self._page_update_min_interval:
+                logger.debug(f"safe_page_update 节流: 距上次更新 {(now - self._last_page_update_time) * 1000:.2f}ms")
                 return
             self._last_page_update_time = now
         
         try:
+            logger.debug("safe_page_update: 开始更新")
             self.page.update()
-        except Exception:
-            pass
+            logger.debug("safe_page_update: 更新完成")
+        except Exception as e:
+            logger.error(f"safe_page_update 异常: {e}", exc_info=True)
     
     def _navigate_to(self, index: int):
-        if index == self.current_page_index or self._navigating:
+        start_time = time.perf_counter()
+        
+        if index == self.current_page_index:
+            logger.debug(f"导航被跳过: 已经在目标页面 {index}")
+            return
+            
+        if self._navigating:
+            logger.warning(f"导航被跳过: 正在导航中 (current={self.current_page_index}, target={index})")
             return
         
+        logger.info(f"========== 开始导航: {self.current_page_index} -> {index} ==========")
         self._navigating = True
         old_index = self.current_page_index
         self.current_page_index = index
         
         try:
-            self._page_containers[old_index].visible = False
-            self._page_containers[index].visible = True
-            self._update_nav_buttons(old_index, index)
+            # 页面离开逻辑
+            t1 = time.perf_counter()
+            if old_index == 1:
+                logger.debug("调用 log_page.on_page_leave()")
+                self.log_page.on_page_leave()
+            elif old_index == 3:
+                logger.debug("调用 llbot_config_page.on_page_leave()")
+                self.llbot_config_page.on_page_leave()
+            logger.debug(f"页面离开耗时: {(time.perf_counter() - t1) * 1000:.2f}ms")
             
+            # 替换内容（使用缓存的控件引用）
+            t2 = time.perf_counter()
+            logger.debug(f"准备替换内容: 从 {old_index} 到 {index}")
+            
+            # 直接使用预先存储的控件引用，避免每次创建列表
+            if index == 0:
+                new_content = self.home_page.control
+            elif index == 1:
+                new_content = self.log_page.control
+            elif index == 2:
+                new_content = self.config_page.control
+            elif index == 3:
+                new_content = self.llbot_config_page.control
+            elif index == 4:
+                new_content = self.about_page.control
+            else:
+                logger.error(f"无效的页面索引: {index}")
+                return
+            
+            logger.debug(f"旧控件类型: {type(self.content_area.content).__name__}")
+            logger.debug(f"新控件类型: {type(new_content).__name__}")
+            
+            self.content_area.content = new_content
+            logger.debug("内容替换完成")
+            logger.debug(f"替换内容耗时: {(time.perf_counter() - t2) * 1000:.2f}ms")
+            
+            # 更新导航按钮
+            t3 = time.perf_counter()
+            logger.debug(f"更新导航按钮: {old_index} -> {index}")
+            self._update_nav_buttons(old_index, index)
+            logger.debug("导航按钮更新完成")
+            logger.debug(f"更新按钮耗时: {(time.perf_counter() - t3) * 1000:.2f}ms")
+            
+            # 更新页面
+            t4 = time.perf_counter()
+            logger.debug("准备调用 page.update()")
             if self.page:
                 self.page.update()
-        except Exception:
-            pass
+                logger.debug("page.update() 完成")
+            else:
+                logger.warning("page 对象不存在!")
+            logger.debug(f"page.update()耗时: {(time.perf_counter() - t4) * 1000:.2f}ms")
+            
+            # 页面进入逻辑
+            t5 = time.perf_counter()
+            if index == 1:
+                logger.debug("调用 log_page.on_page_enter()")
+                self.log_page.on_page_enter()
+            elif index == 3:
+                logger.debug("Bot配置页面进入，设置可见标志")
+                self.llbot_config_page.on_page_enter()
+                # 在后台线程中刷新，但线程会检查_is_visible标志
+                def lazy_refresh():
+                    try:
+                        # 使用短延迟让页面完全加载
+                        import time
+                        time.sleep(0.1)
+                        # refresh方法内部会检查_is_visible
+                        self.llbot_config_page.refresh()
+                    except Exception as e:
+                        logger.error(f"懒加载异常: {e}", exc_info=True)
+                threading.Thread(target=lazy_refresh, daemon=True).start()
+            logger.debug(f"页面进入逻辑耗时: {(time.perf_counter() - t5) * 1000:.2f}ms")
+            
+        except Exception as e:
+            logger.error(f"========== 导航异常: {e} ==========", exc_info=True)
+            logger.error(f"异常时状态: current_page_index={self.current_page_index}, _navigating={self._navigating}")
         finally:
             self._navigating = False
-        
-        # 异步执行页面离开和进入逻辑
-        def async_page_transition():
-            try:
-                if old_index == 1:
-                    self.log_page.on_page_leave()
-                
-                if index == 1:
-                    self.log_page.on_page_enter()
-                elif index == 2:
-                    self.config_page.refresh()
-                elif index == 3:
-                    self.llbot_config_page.refresh()
-                elif index == 4:
-                    self.about_page.refresh()
-            except Exception:
-                pass
-        threading.Thread(target=async_page_transition, daemon=True).start()
+            total_time = (time.perf_counter() - start_time) * 1000
+            logger.info(f"========== 导航完成，总耗时: {total_time:.2f}ms ==========")
     
     def _create_nav_button(self, index: int, item: dict) -> ft.Container:
         is_selected = index == self.current_page_index
@@ -362,8 +444,13 @@ class MainWindow:
         )
     
     def _update_nav_buttons(self, old_index: int, new_index: int):
+        import time
+        start = time.perf_counter()
+        
         if old_index == new_index:
             return
+        
+        t1 = time.perf_counter()
         if 0 <= old_index < len(self._nav_buttons):
             item = self._nav_items[old_index]
             self._nav_buttons[old_index].bgcolor = None
@@ -372,6 +459,9 @@ class MainWindow:
             col.controls[0].color = ft.Colors.ON_SURFACE_VARIANT
             col.controls[1].color = ft.Colors.ON_SURFACE_VARIANT
             col.controls[1].weight = ft.FontWeight.NORMAL
+        logger.debug(f"更新旧按钮耗时: {(time.perf_counter() - t1) * 1000:.2f}ms")
+        
+        t2 = time.perf_counter()
         if 0 <= new_index < len(self._nav_buttons):
             item = self._nav_items[new_index]
             self._nav_buttons[new_index].bgcolor = ft.Colors.with_opacity(0.15, ft.Colors.PRIMARY)
@@ -380,14 +470,23 @@ class MainWindow:
             col.controls[0].color = ft.Colors.PRIMARY
             col.controls[1].color = ft.Colors.PRIMARY
             col.controls[1].weight = ft.FontWeight.W_600
+        logger.debug(f"更新新按钮耗时: {(time.perf_counter() - t2) * 1000:.2f}ms")
+        
+        logger.debug(f"_update_nav_buttons总耗时: {(time.perf_counter() - start) * 1000:.2f}ms")
     
     def _on_nav_click(self, index: int):
+        click_time = time.perf_counter()
+        logger.info(f"导航按钮被点击: index={index}")
+        
         if self._navigating:
+            logger.debug("导航被跳过: 正在导航中")
             return
         
         if self.home_page.is_starting or self.home_page.is_downloading or self.home_page.is_downloading_llbot or self.home_page.is_downloading_node or self.home_page.is_downloading_ffmpeg or self.home_page.is_downloading_ffprobe:
+            logger.debug("导航被跳过: 正在下载或启动中")
             return
         
+        logger.debug(f"点击处理耗时: {(time.perf_counter() - click_time) * 1000:.2f}ms")
         self._navigate_to(index)
     
     def _on_theme_toggle(self, e):
@@ -404,15 +503,38 @@ class MainWindow:
         pass
     
     def _on_uin_received(self, uin: str, nickname: str):
+        if not self.page or self._navigating:
+            return
+            
         if uin:
             self._update_avatar(uin)
-            self.llbot_config_page.refresh()
         if uin and nickname:
             self._update_home_title(uin, nickname)
             self._update_window_title(uin, nickname)
+        
+        if uin and self.current_page_index == 3 and not self._navigating:
+            logger.info(f"获取到 uin={uin}，当前在 Bot 配置页面，触发刷新")
+            def refresh_bot_config():
+                try:
+                    if self.current_page_index == 3 and not self._navigating:
+                        self.llbot_config_page.refresh()
+                except Exception as e:
+                    logger.error(f"刷新 Bot 配置页面失败: {e}", exc_info=True)
+            
+            import threading
+            threading.Thread(target=refresh_bot_config, daemon=True).start()
     
     def _update_avatar(self, uin: str):
-        if not uin:
+        if not uin or self._navigating:
+            return
+        
+        if not self.page:
+            return
+        
+        try:
+            if not self.avatar_image.page:
+                return
+        except Exception:
             return
         
         self.avatar_image.src = f"https://thirdqq.qlogo.cn/g?b=qq&nk={uin}&s=640"
@@ -420,10 +542,11 @@ class MainWindow:
         self.avatar_icon.visible = False
         
         page = self.page
-        if page:
+        if page and not self._navigating:
             async def do_update():
                 try:
-                    page.update()
+                    if not self._navigating:
+                        page.update()
                 except Exception:
                     pass
             try:
@@ -432,19 +555,41 @@ class MainWindow:
                 pass
     
     def _update_home_title(self, uin: str, nickname: str):
-        if uin and nickname:
-            self.home_page.update_title(f"{nickname}({uin})")
+        if not uin or not nickname or self._navigating:
+            return
+        
+        if not self.page or not self.home_page or not self.home_page.control:
+            return
+        
+        try:
+            if self.home_page.control.page != self.page:
+                return
+        except Exception:
+            return
+        
+        self.home_page.update_title(f"{nickname}({uin})")
     
     def _on_about_page_update_complete(self, component: str):
         self.home_page.clear_update_banner(component)
     
     def _on_updates_found(self, updates_found: list):
-        if self.page:
-            async def notify_pages():
+        if not self.page or self._navigating:
+            return
+        
+        async def notify_pages():
+            if self._navigating:
+                return
+            try:
                 self.about_page.set_updates_found(updates_found)
-                if self.page:
+                if self.page and not self._navigating:
                     self.page.update()
+            except Exception:
+                pass
+        
+        try:
             self.page.run_task(notify_pages)
+        except Exception:
+            pass
     
     def _on_restart_service_after_update(self):
         import logging
@@ -456,12 +601,13 @@ class MainWindow:
         self.home_page._on_global_start_click(None)
     
     def _update_window_title(self, uin: str, nickname: str):
-        if self.page and uin and nickname:
+        if self.page and uin and nickname and not self._navigating:
             self.page.title = f"{APP_NAME} -- {nickname}({uin})"
             page = self.page
             async def do_update():
                 try:
-                    page.update()
+                    if not self._navigating:
+                        page.update()
                 except Exception:
                     pass
             try:
@@ -588,6 +734,25 @@ class MainWindow:
                 f'cmd /c start "更新" /D "{batch_dir}" "{script_path}"',
                 shell=True
             )
+    
+    def _restore_button_state_on_reconnect(self):
+        """Session 重连时恢复按钮状态"""
+        try:
+            pmhq_status = self.process_manager.get_process_status("pmhq")
+            llbot_status = self.process_manager.get_process_status("llbot")
+            
+            from core.process_manager import ProcessStatus
+            pmhq_running = pmhq_status == ProcessStatus.RUNNING
+            llbot_running = llbot_status == ProcessStatus.RUNNING
+            
+            # 只有两个进程都在运行才算服务运行中
+            services_running = pmhq_running and llbot_running
+            
+            logger.info(f"恢复按钮状态: PMHQ={pmhq_running}, LLBot={llbot_running}, 服务运行={services_running}")
+            self.home_page._update_button_state(services_running)
+            
+        except Exception as e:
+            logger.error(f"恢复按钮状态失败: {e}", exc_info=True)
     
     def _cleanup(self, force_cleanup: bool = False):
         self.monitoring_resources = False
@@ -844,27 +1009,44 @@ class MainWindow:
             if self._navigating or self.current_page_index != 0:
                 return
             try:
-                # 从收集器获取最近10条日志
-                recent_logs = self.async_log_collector.get_recent_logs(10)
-                log_entries = [
-                    {
-                        "timestamp": log.timestamp.strftime("%H:%M:%S"),
-                        "process_name": log.process_name,
-                        "level": log.level,
-                        "message": log.message,
-                    }
-                    for log in recent_logs
-                ]
-                self.home_page.refresh_logs(log_entries)
+                if not self.page or self._navigating:
+                    return
+                
+                def collect_logs():
+                    recent_logs = self.async_log_collector.get_recent_logs(10)
+                    return [
+                        {
+                            "timestamp": log.timestamp.strftime("%H:%M:%S"),
+                            "process_name": log.process_name,
+                            "level": log.level,
+                            "message": log.message,
+                        }
+                        for log in recent_logs
+                    ]
+                
+                log_entries = await asyncio.to_thread(collect_logs)
+                
+                # 线程执行完后再次检查状态
+                if self._navigating or self.current_page_index != 0 or not self.page:
+                    return
+                if not self.home_page.control or not self.home_page.control.page:
+                    return
+                    
+                await self.home_page.refresh_logs_async(log_entries)
             except Exception:
                 pass
         
         async def on_resources_updated(data: Dict[str, Any]):
-            # 只在首页时更新资源
             if self._navigating or self.current_page_index != 0:
                 return
             try:
-                self.home_page.refresh_process_resources()
+                if not self.page or self._navigating:
+                    return
+                if self.current_page_index != 0:
+                    return
+                if not self.home_page.control or not self.home_page.control.page:
+                    return
+                await self.home_page.refresh_process_resources_async()
             except Exception:
                 pass
         

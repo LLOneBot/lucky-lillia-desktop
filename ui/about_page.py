@@ -385,6 +385,13 @@ class AboutPage:
         self.update_manager.check_updates_async(versions)
 
     def set_updates_found(self, updates_found: list):
+        # 检查控件是否还在页面上
+        try:
+            if not self._button_text.page:
+                return
+        except Exception:
+            return
+        
         if updates_found:
             self._button_text.value = "立即更新"
             self._button_icon.name = ft.Icons.DOWNLOAD

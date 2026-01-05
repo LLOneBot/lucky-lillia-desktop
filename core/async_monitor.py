@@ -113,7 +113,6 @@ class AsyncResourceMonitor:
         return self._qq_version
     
     async def fetch_uin_info(self) -> Optional[SelfInfo]:
-        """异步获取登录信息"""
         if not self._pmhq_client:
             return None
         

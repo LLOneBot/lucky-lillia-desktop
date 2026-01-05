@@ -58,21 +58,42 @@ class LLBotConfigPage:
         self.current_config: Dict[str, Any] = {}
         self.connect_controls: List[Dict] = []
         self._page = None
+        self._initialized = False
+        self._last_uin = None
+        self._is_visible = False  # 标记页面是否可见
         
     def _get_config_path(self) -> Optional[str]:
+        import logging
+        logger = logging.getLogger(__name__)
+        
         uin = self.get_uin_func()
+        logger.info(f"获取配置路径: uin={uin}")
+        
         if not uin:
+            logger.warning("uin 为空，无法确定配置文件路径")
             return None
-        return os.path.join("bin", "llbot", "data", f"config_{uin}.json")
+        
+        config_path = os.path.join("bin", "llbot", "data", f"config_{uin}.json")
+        logger.info(f"配置文件路径: {config_path}")
+        return config_path
     
     def _load_config(self) -> Dict[str, Any]:
+        import logging
+        logger = logging.getLogger(__name__)
+        
         config_path = self._get_config_path()
+        logger.info(f"Bot配置加载: config_path={config_path}")
+        
         if not config_path or not os.path.exists(config_path):
+            logger.info(f"配置文件不存在，使用默认配置")
             return copy.deepcopy(self.DEFAULT_CONFIG)
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception:
+                config = json.load(f)
+                logger.info(f"成功加载配置: {json.dumps(config, ensure_ascii=False, indent=2)}")
+                return config
+        except Exception as e:
+            logger.error(f"加载配置失败: {e}，使用默认配置")
             return copy.deepcopy(self.DEFAULT_CONFIG)
     
     def _save_config(self, config: Dict[str, Any]) -> bool:
@@ -589,17 +610,49 @@ class LLBotConfigPage:
         except Exception:
             pass
     
-    def refresh(self):
-        has_uin = bool(self.get_uin_func())
-        new_config = self._load_config()
-        
-        # 只有配置变化时才重建UI
-        if new_config != self.current_config:
-            self.current_config = new_config
-            self._update_ui()
-            self._rebuild_tabs()
-        
+    def refresh(self, skip_update: bool = False):
+        """刷新配置页面 - 带可见性检查"""
+        import logging
+        logger = logging.getLogger(__name__)
+
+        # 如果页面不可见，不执行刷新
+        if not self._is_visible:
+            logger.debug("Bot配置页面不可见，跳过刷新")
+            return
+
+        current_uin = self.get_uin_func()
+        has_uin = bool(current_uin)
+        uin_changed = current_uin != self._last_uin
+
+        logger.info(f"Bot配置页面刷新: has_uin={has_uin}, current_uin={current_uin}, last_uin={self._last_uin}, uin_changed={uin_changed}, _initialized={self._initialized}")
+
+        # 首次进入或 uin 发生变化时需要完整刷新
+        if not self._initialized or uin_changed:
+            if uin_changed:
+                logger.info(f"UIN 发生变化: {self._last_uin} -> {current_uin}，重新加载配置")
+            self._initialized = True
+            self._last_uin = current_uin
+
+            new_config = self._load_config()
+            if new_config != self.current_config:
+                logger.info("配置已更新，重新加载UI")
+                self.current_config = new_config
+                self._update_ui()
+                self._rebuild_tabs()
+
+        # 更新可见性
         self.no_uin_container.visible = not has_uin
         self.config_content.visible = has_uin
         self.floating_buttons.visible = has_uin
-        self._try_update()
+        logger.info(f"UI可见性更新: 未登录提示={not has_uin}, 配置内容={has_uin}")
+
+        if not skip_update:
+            self._try_update()
+
+    def on_page_enter(self):
+        """页面进入时调用"""
+        self._is_visible = True
+
+    def on_page_leave(self):
+        """页面离开时调用"""
+        self._is_visible = False
