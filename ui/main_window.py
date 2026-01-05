@@ -204,7 +204,6 @@ class MainWindow:
             ft.Container(content=self.about_page.control, expand=True, visible=False),
         ]
         
-        # 使用简单的 Container，不使用动画避免崩溃
         self.content_area = ft.Container(
             content=self.home_page.control,
             expand=True,
@@ -347,10 +346,10 @@ class MainWindow:
                 self.llbot_config_page.on_page_leave()
             logger.debug(f"页面离开耗时: {(time.perf_counter() - t1) * 1000:.2f}ms")
             
-            # 替换内容（使用缓存的控件引用）
+            # 替换内容（使用缓存的控件引用）+ 淡入淡出动画
             t2 = time.perf_counter()
             logger.debug(f"准备替换内容: 从 {old_index} 到 {index}")
-            
+
             # 直接使用预先存储的控件引用，避免每次创建列表
             if index == 0:
                 new_content = self.home_page.control
@@ -365,12 +364,13 @@ class MainWindow:
             else:
                 logger.error(f"无效的页面索引: {index}")
                 return
-            
+
             logger.debug(f"旧控件类型: {type(self.content_area.content).__name__}")
             logger.debug(f"新控件类型: {type(new_content).__name__}")
-            
+
             self.content_area.content = new_content
-            logger.debug("内容替换完成")
+
+            logger.debug("内容替换完成（带动画）")
             logger.debug(f"替换内容耗时: {(time.perf_counter() - t2) * 1000:.2f}ms")
             
             # 更新导航按钮
