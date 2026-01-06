@@ -739,20 +739,15 @@ class MainWindow:
             )
     
     def _restore_button_state_on_reconnect(self):
-        """Session 重连时恢复按钮状态"""
         try:
-            pmhq_status = self.process_manager.get_process_status("pmhq")
             llbot_status = self.process_manager.get_process_status("llbot")
             
             from core.process_manager import ProcessStatus
-            pmhq_running = pmhq_status == ProcessStatus.RUNNING
             llbot_running = llbot_status == ProcessStatus.RUNNING
             
-            # 只有两个进程都在运行才算服务运行中
-            services_running = pmhq_running and llbot_running
-            
-            logger.info(f"恢复按钮状态: PMHQ={pmhq_running}, LLBot={llbot_running}, 服务运行={services_running}")
-            self.home_page._update_button_state(services_running)
+            # PMHQ 是启动器，启动后会退出，只检查 LLBot 状态
+            logger.info(f"恢复按钮状态: LLBot={llbot_running}")
+            self.home_page._update_button_state(llbot_running)
             
         except Exception as e:
             logger.error(f"恢复按钮状态失败: {e}", exc_info=True)

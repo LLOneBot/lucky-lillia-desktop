@@ -800,9 +800,8 @@ class ProcessManager:
         attempt = 0
         
         while attempt < max_attempts:
-            if self._status.get("pmhq") != ProcessStatus.RUNNING:
-                logger.info("PMHQ已停止，停止获取uin")
-                return
+            # 检查是否有 QQ 进程在运行（PMHQ 启动后会退出，但 QQ 进程会继续运行）
+            # 不再检查 PMHQ 状态，因为 PMHQ 是启动器，启动 QQ 后就会退出
             
             info = client.fetch_self_info()
             if info and info.uin:

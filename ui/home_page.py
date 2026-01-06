@@ -2132,8 +2132,6 @@ class HomePage:
         pids = self.process_manager.get_all_pids()
         
         pmhq_pid = pids.get("pmhq")
-        pmhq_status = self.process_manager.get_process_status("pmhq")
-        pmhq_running = pmhq_status == ProcessStatus.RUNNING
         if pmhq_pid:
             cpu, mem, is_alive = self._get_process_resources_sync(pmhq_pid)
             if is_alive:
@@ -2149,7 +2147,8 @@ class HomePage:
                 total_cpu += cpu
                 total_mem += mem
         
-        bot_running = pmhq_running and llbot_running
+        # PMHQ 是启动器，启动 QQ 后就会退出，所以只检查 LLBot 状态
+        bot_running = llbot_running
         
         qq_cpu = 0.0
         qq_mem = 0.0
