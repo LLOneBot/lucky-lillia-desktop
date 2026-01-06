@@ -2078,15 +2078,9 @@ class HomePage:
             self.log_card.page = page
     
     def update_title(self, title: str):
-        """更新控制面板标题
-        
-        Args:
-            title: 新标题
-        """
         if not self.title_text:
             return
         
-        # 检查控件是否还在页面上
         try:
             if not self.title_text.page:
                 return
@@ -2094,9 +2088,21 @@ class HomePage:
             return
         
         self.title_text.value = title
-        # 显示昵称时隐藏图标
         if self.title_icon:
             self.title_icon.visible = (title == "控制面板")
+        
+        # 触发 UI 更新
+        try:
+            page = self.title_text.page
+            if page:
+                async def do_update():
+                    try:
+                        page.update()
+                    except Exception:
+                        pass
+                page.run_task(do_update)
+        except Exception:
+            pass
     
     def _on_view_all_logs(self):
         if self.on_navigate_logs:

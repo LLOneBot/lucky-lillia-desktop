@@ -505,24 +505,27 @@ class MainWindow:
     def _on_uin_received(self, uin: str, nickname: str):
         if not self.page or self._navigating:
             return
-            
-        if uin:
-            self._update_avatar(uin)
-        if uin and nickname:
-            self._update_home_title(uin, nickname)
-            self._update_window_title(uin, nickname)
         
-        if uin and self.current_page_index == 3 and not self._navigating:
-            logger.info(f"获取到 uin={uin}，当前在 Bot 配置页面，触发刷新")
-            def refresh_bot_config():
-                try:
-                    if self.current_page_index == 3 and not self._navigating:
-                        self.llbot_config_page.refresh()
-                except Exception as e:
-                    logger.error(f"刷新 Bot 配置页面失败: {e}", exc_info=True)
-            
-            import threading
-            threading.Thread(target=refresh_bot_config, daemon=True).start()
+        async def do_ui_updates():
+            if self._navigating:
+                return
+            try:
+                if uin:
+                    self._update_avatar(uin)
+                if uin and nickname:
+                    self._update_home_title(uin, nickname)
+                    self._update_window_title(uin, nickname)
+                
+                # 如果当前在 Bot 配置页面，触发刷新
+                if uin and self.current_page_index == 3:
+                    self.llbot_config_page.refresh()
+            except Exception as e:
+                logger.error(f"_on_uin_received UI 更新失败: {e}", exc_info=True)
+        
+        try:
+            self.page.run_task(do_ui_updates)
+        except Exception as e:
+            logger.error(f"_on_uin_received run_task 失败: {e}")
     
     def _update_avatar(self, uin: str):
         if not uin or self._navigating:

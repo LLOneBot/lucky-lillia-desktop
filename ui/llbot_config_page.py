@@ -603,12 +603,28 @@ class LLBotConfigPage:
             page.update()
     
     def _try_update(self):
+        import logging
+        logger = logging.getLogger(__name__)
         try:
             page = self._page or (self.control.page if self.control else None)
+            logger.debug(f"_try_update: _page={self._page}, control.page={self.control.page if self.control else None}")
             if page:
-                page.update()
-        except Exception:
-            pass
+                async def do_update():
+                    try:
+                        page.update()
+                        logger.debug("_try_update: page.update() 成功")
+                    except Exception as e:
+                        logger.error(f"_try_update async 异常: {e}")
+                try:
+                    page.run_task(do_update)
+                except Exception as e:
+                    # 如果 run_task 失败，尝试直接更新
+                    page.update()
+                    logger.debug("_try_update: 直接 page.update() 成功")
+            else:
+                logger.warning("_try_update: 没有可用的 page 对象")
+        except Exception as e:
+            logger.error(f"_try_update 异常: {e}", exc_info=True)
     
     def refresh(self, skip_update: bool = False):
         """刷新配置页面 - 带可见性检查"""
