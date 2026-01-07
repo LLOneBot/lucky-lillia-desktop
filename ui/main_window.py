@@ -98,6 +98,10 @@ class MainWindow:
         """
         self.page = page
         
+        # 重连时重置导航状态
+        if getattr(self, '_build_completed', False):
+            self.current_page_index = 0
+        
         # 设置窗口属性
         page.title = APP_NAME
         page.padding = 0  # 移除页面默认padding
@@ -290,6 +294,20 @@ class MainWindow:
             self._restore_button_state_on_reconnect()
             self.home_page.refresh_process_resources()
             
+            # 恢复日志预览
+            if self.async_log_collector:
+                recent_logs = self.async_log_collector.get_recent_logs(10)
+                log_entries = [
+                    {
+                        "timestamp": log.timestamp.strftime("%H:%M:%S"),
+                        "process_name": log.process_name,
+                        "level": log.level,
+                        "message": log.message,
+                    }
+                    for log in recent_logs
+                ]
+                self.home_page.refresh_logs(log_entries)
+            
             current_uin = self.process_manager.get_uin()
             current_nickname = self.process_manager.get_nickname()
             if current_uin:
@@ -398,17 +416,7 @@ class MainWindow:
             elif index == 3:
                 logger.debug("Bot配置页面进入，设置可见标志")
                 self.llbot_config_page.on_page_enter()
-                # 在后台线程中刷新，但线程会检查_is_visible标志
-                def lazy_refresh():
-                    try:
-                        # 使用短延迟让页面完全加载
-                        import time
-                        time.sleep(0.1)
-                        # refresh方法内部会检查_is_visible
-                        self.llbot_config_page.refresh()
-                    except Exception as e:
-                        logger.error(f"懒加载异常: {e}", exc_info=True)
-                threading.Thread(target=lazy_refresh, daemon=True).start()
+                self.llbot_config_page.refresh()
             logger.debug(f"页面进入逻辑耗时: {(time.perf_counter() - t5) * 1000:.2f}ms")
             
         except Exception as e:
@@ -505,6 +513,10 @@ class MainWindow:
     def _on_uin_received(self, uin: str, nickname: str):
         if not self.page or self._navigating:
             return
+        
+        # 同步更新 process_manager 的 uin，确保 LLBotConfigPage 能立即获取到
+        if uin:
+            self.process_manager.set_uin(uin, nickname)
         
         async def do_ui_updates():
             if self._navigating:

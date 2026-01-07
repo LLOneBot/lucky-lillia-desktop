@@ -11,6 +11,9 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from logging.handlers import BaseRotatingHandler
 
+from utils.temp_cleaner import cleanup_pyinstaller_temp
+cleanup_pyinstaller_temp()
+
 from core.process_manager import ProcessManager, is_admin
 from core.log_collector import LogCollector
 from core.async_log_collector import AsyncLogCollector

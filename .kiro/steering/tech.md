@@ -5,7 +5,7 @@
 - Package manager: `uv` (preferred) or pip
 
 ## Core Dependencies
-- `flet` / `flet-desktop` >= 0.28.3 - Cross-platform UI framework
+- `flet` / `flet-desktop` >= 0.80.0 - Cross-platform UI framework
 - `psutil` - System/process monitoring
 - `pystray` + `pillow` - System tray integration
 - `packaging` - Version comparison

@@ -771,6 +771,12 @@ class ProcessManager:
         with self._lock:
             return self._nickname
     
+    def set_uin(self, uin: str, nickname: str = "") -> None:
+        with self._lock:
+            self._uin = uin
+            if nickname:
+                self._nickname = nickname
+    
     def set_uin_callback(self, callback: Callable[[str, str], None]) -> None:
         with self._lock:
             self._uin_callback = callback

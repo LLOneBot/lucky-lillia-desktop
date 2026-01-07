@@ -23,6 +23,6 @@ bin/*
 package/
 .hypothesis/
 .idea/
-
+LuckyLilliaDesktop.Avalonia/
 lucky-lillia-desktop-win-x64.tgz
 lucky-lillia-desktop.exe
